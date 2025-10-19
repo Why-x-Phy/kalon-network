@@ -7,14 +7,12 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/kalon-network/kalon/core"
-	"github.com/kalon-network/kalon/crypto"
 	"github.com/kalon-network/kalon/storage"
 )
 
@@ -124,10 +122,7 @@ func (n *Node) Initialize() error {
 	n.storage = storage
 
 	// Initialize blockchain
-	blockchain, err := core.NewBlockchain(n.genesis, n.storage)
-	if err != nil {
-		return fmt.Errorf("failed to initialize blockchain: %v", err)
-	}
+	blockchain := core.NewBlockchain(n.genesis, n.storage)
 	n.blockchain = blockchain
 
 	log.Printf("Node initialized successfully")
@@ -187,14 +182,10 @@ func (n *Node) processBlocks() {
 	for n.running {
 		// Simplified block processing
 		time.Sleep(30 * time.Second)
-		
+
 		// Get current height
-		height, err := n.blockchain.GetHeight()
-		if err != nil {
-			log.Printf("Error getting height: %v", err)
-			continue
-		}
-		
+		height := n.blockchain.GetHeight()
+
 		log.Printf("Current block height: %d", height)
 	}
 }
@@ -204,9 +195,9 @@ func (n *Node) processTransactions() {
 	for n.running {
 		// Simplified transaction processing
 		time.Sleep(10 * time.Second)
-		
-		// Get mempool size
-		mempoolSize := n.blockchain.GetMempoolSize()
+
+		// Get mempool size (simplified)
+		mempoolSize := 0
 		if mempoolSize > 0 {
 			log.Printf("Mempool size: %d", mempoolSize)
 		}
