@@ -169,7 +169,6 @@ start_node() {
     cmd="$cmd --p2p $P2P_ADDR"
     cmd="$cmd --datadir $DATA_DIR"
     cmd="$cmd --genesis $GENESIS_FILE"
-    cmd="$cmd --seednodes $SEED_NODES"
     
     if [[ "$MINING" == "true" ]]; then
         cmd="$cmd --mining --threads $THREADS"
