@@ -110,7 +110,7 @@ check_prerequisites() {
     log_info "Checking prerequisites..."
     
     # Check if kalon-node exists
-    if [[ ! -f "./kalon-node" ]]; then
+    if [[ ! -f "./build/kalon-node" ]]; then
         log_error "kalon-node binary not found. Run 'make build' first."
         exit 1
     fi
@@ -142,7 +142,7 @@ init_node() {
     
     # Initialize node
     log_info "Running node initialization..."
-    ./kalon-node --init --genesis "$GENESIS_FILE" --datadir "$DATA_DIR"
+    ./build/kalon-node --init --genesis "$GENESIS_FILE" --datadir "$DATA_DIR"
     
     log_success "Node initialized"
 }
@@ -164,7 +164,7 @@ start_node() {
     echo
     
     # Build command
-    local cmd="./kalon-node"
+    local cmd="./build/kalon-node"
     cmd="$cmd --rpc $RPC_ADDR"
     cmd="$cmd --p2p $P2P_ADDR"
     cmd="$cmd --datadir $DATA_DIR"

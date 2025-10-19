@@ -3,6 +3,7 @@ package storage
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"sync"
 
 	"github.com/kalon-network/kalon/core"
@@ -40,7 +41,7 @@ func NewLevelDBStorage(path string) (*LevelDBStorage, error) {
 func (s *LevelDBStorage) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	if s.db != nil {
 		return s.db.Close()
 	}
@@ -51,7 +52,7 @@ func (s *LevelDBStorage) Close() error {
 func (s *LevelDBStorage) Put(key, value []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	return s.db.Put(key, value, nil)
 }
 
@@ -59,7 +60,7 @@ func (s *LevelDBStorage) Put(key, value []byte) error {
 func (s *LevelDBStorage) Get(key []byte) ([]byte, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	return s.db.Get(key, nil)
 }
 
@@ -67,7 +68,7 @@ func (s *LevelDBStorage) Get(key []byte) ([]byte, error) {
 func (s *LevelDBStorage) Delete(key []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	return s.db.Delete(key, nil)
 }
 
@@ -75,7 +76,7 @@ func (s *LevelDBStorage) Delete(key []byte) error {
 func (s *LevelDBStorage) Has(key []byte) (bool, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	_, err := s.db.Get(key, nil)
 	if err == leveldb.ErrNotFound {
 		return false, nil
@@ -85,7 +86,7 @@ func (s *LevelDBStorage) Has(key []byte) (bool, error) {
 
 // ensureDir ensures a directory exists
 func ensureDir(path string) error {
-	return fmt.Errorf("ensureDir not implemented")
+	return os.MkdirAll(path, 0755)
 }
 
 // LevelDBStats represents LevelDB statistics
@@ -97,10 +98,10 @@ type LevelDBStats struct {
 func (s *LevelDBStorage) GetStats() (*LevelDBStats, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	stats := make(map[string]interface{})
 	stats["path"] = s.path
-	
+
 	return &LevelDBStats{
 		Stats: stats,
 	}, nil
