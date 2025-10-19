@@ -140,9 +140,9 @@ init_node() {
         return
     fi
     
-    # Initialize node
-    log_info "Running node initialization..."
-    ./build/kalon-node --init --genesis "$GENESIS_FILE" --datadir "$DATA_DIR"
+    # Initialize node (just create data directory)
+    log_info "Creating data directory and initializing..."
+    mkdir -p "$DATA_DIR"
     
     log_success "Node initialized"
 }
