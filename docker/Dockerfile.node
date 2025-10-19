@@ -1,0 +1,60 @@
+# Multi-stage build for Kalon Node
+FROM golang:1.22-alpine AS builder
+
+# Install build dependencies
+RUN apk add --no-cache git make gcc musl-dev
+
+# Set working directory
+WORKDIR /src
+
+# Copy go mod files
+COPY go.mod go.sum ./
+
+# Download dependencies
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build the application
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o kalon-node ./cmd/kalon-node
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o kalon-wallet ./cmd/kalon-wallet
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o kalon-miner ./cmd/kalon-miner
+
+# Final stage
+FROM alpine:3.18
+
+# Install runtime dependencies
+RUN apk add --no-cache ca-certificates tzdata
+
+# Create non-root user
+RUN addgroup -g 1000 kalon && \
+    adduser -D -s /bin/sh -u 1000 -G kalon kalon
+
+# Set working directory
+WORKDIR /app
+
+# Copy binaries from builder stage
+COPY --from=builder /src/kalon-node /usr/local/bin/
+COPY --from=builder /src/kalon-wallet /usr/local/bin/
+COPY --from=builder /src/kalon-miner /usr/local/bin/
+
+# Copy genesis file
+COPY genesis/genesis.json /app/genesis.json
+
+# Create data directory
+RUN mkdir -p /app/data && \
+    chown -R kalon:kalon /app
+
+# Switch to non-root user
+USER kalon
+
+# Expose ports
+EXPOSE 16314 17333
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:16314/health || exit 1
+
+# Default command
+CMD ["kalon-node", "--rpc", ":16314", "--p2p", ":17333", "--genesis", "/app/genesis.json", "--datadir", "/app/data"]

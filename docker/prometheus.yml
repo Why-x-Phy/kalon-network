@@ -1,0 +1,39 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Kalon Node
+  - job_name: 'kalon-node'
+    static_configs:
+      - targets: ['kalon-node:16314']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Kalon Explorer API
+  - job_name: 'kalon-explorer-api'
+    static_configs:
+      - targets: ['kalon-explorer-api:8081']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  # Redis
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    scrape_interval: 30s
+
+  # Node Exporter (if available)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 30s

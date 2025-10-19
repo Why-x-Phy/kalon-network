@@ -1,0 +1,80 @@
+version: '3.8'
+
+# Minimal Kalon Network setup for development and testing
+services:
+  # Kalon Node
+  kalon-node:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.node
+    container_name: kalon-node
+    restart: unless-stopped
+    ports:
+      - "16314:16314"  # RPC
+      - "17333:17333"  # P2P
+    volumes:
+      - kalon-data:/app/data
+      - ./genesis.json:/app/genesis.json:ro
+    environment:
+      - KALON_RPC_ADDR=:16314
+      - KALON_P2P_ADDR=:17333
+      - KALON_DATA_DIR=/app/data
+      - KALON_GENESIS_FILE=/app/genesis.json
+    command: [
+      "kalon-node",
+      "--rpc", ":16314",
+      "--p2p", ":17333",
+      "--genesis", "/app/genesis.json",
+      "--datadir", "/app/data"
+    ]
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:16314/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - kalon-network
+
+  # Kalon Explorer API
+  kalon-explorer-api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    container_name: kalon-explorer-api
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      - KALON_RPC_URL=http://kalon-node:16314
+      - KALON_API_ADDR=:8081
+    volumes:
+      - kalon-data:/app/data
+    depends_on:
+      kalon-node:
+        condition: service_healthy
+    networks:
+      - kalon-network
+
+  # Kalon Explorer UI
+  kalon-explorer:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.explorer
+    container_name: kalon-explorer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      kalon-explorer-api:
+        condition: service_healthy
+    networks:
+      - kalon-network
+
+volumes:
+  kalon-data:
+    driver: local
+
+networks:
+  kalon-network:
+    driver: bridge
