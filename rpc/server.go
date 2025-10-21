@@ -701,9 +701,9 @@ func (h *RPCHandler) handleCreateBlockTemplate(req *RPCRequest) *RPCResponse {
 		Result: map[string]interface{}{
 			"number":     block.Header.Number,
 			"difficulty": block.Header.Difficulty,
-			"parentHash": block.Header.ParentHash.String(),
+			"parentHash": hex.EncodeToString(block.Header.ParentHash[:]),
 			"timestamp":  block.Header.Timestamp.Unix(),
-			"miner":      block.Header.Miner.String(),
+			"miner":      hex.EncodeToString(block.Header.Miner[:]),
 		},
 		ID: req.ID,
 	}

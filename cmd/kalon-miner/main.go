@@ -374,15 +374,26 @@ func (rpc *RPCBlockchain) CreateNewBlock(miner core.Address, txs []core.Transact
 	}
 
 	// Parse parent hash from template
-	parentHashStr, ok := templateData["parentHash"].(string)
 	var parentHash core.Hash
-	if ok && parentHashStr != "" {
-		// Parse parent hash from string
-		hashBytes, err := hex.DecodeString(parentHashStr)
-		if err == nil && len(hashBytes) == 32 {
-			copy(parentHash[:], hashBytes)
-		} else {
-			log.Printf("Failed to parse parent hash: %s, error: %v", parentHashStr, err)
+	if parentHashData, ok := templateData["parentHash"]; ok {
+		switch v := parentHashData.(type) {
+		case string:
+			// Try to parse as hex string
+			hashBytes, err := hex.DecodeString(v)
+			if err == nil && len(hashBytes) == 32 {
+				copy(parentHash[:], hashBytes)
+			} else {
+				log.Printf("Failed to parse parent hash as hex: %s, error: %v", v, err)
+			}
+		case []byte:
+			// Direct byte array
+			if len(v) == 32 {
+				copy(parentHash[:], v)
+			} else {
+				log.Printf("Invalid parent hash length: %d", len(v))
+			}
+		default:
+			log.Printf("Unknown parent hash type: %T, value: %v", v, v)
 		}
 	} else {
 		log.Printf("No parent hash in template: %v", templateData)
