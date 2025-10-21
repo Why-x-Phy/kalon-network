@@ -311,7 +311,7 @@ func (rpc *RPCBlockchain) GetBestBlock() *core.Block {
 			},
 		}
 	}
-	
+
 	difficulty, ok := blockData["difficulty"].(float64)
 	if !ok {
 		log.Printf("Invalid difficulty in block response: %v", blockData["difficulty"])
@@ -393,7 +393,13 @@ func (rpc *RPCBlockchain) AddBlock(block *core.Block) error {
 		JSONRPC: "2.0",
 		Method:  "submitBlock",
 		Params: map[string]interface{}{
-			"block": block,
+			"block": map[string]interface{}{
+				"number":     float64(block.Header.Number),
+				"difficulty": float64(block.Header.Difficulty),
+				"nonce":      float64(block.Header.Nonce),
+				"hash":       block.Hash.String(),
+				"timestamp":  float64(block.Header.Timestamp.Unix()),
+			},
 		},
 		ID: 3,
 	}
