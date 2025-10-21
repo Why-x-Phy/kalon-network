@@ -742,13 +742,13 @@ func (h *RPCHandler) handleSubmitBlock(req *RPCRequest) *RPCResponse {
 		log.Printf("Invalid number in block data: %v", blockData["number"])
 		number = 0
 	}
-	
+
 	difficulty, ok := blockData["difficulty"].(float64)
 	if !ok {
 		log.Printf("Invalid difficulty in block data: %v", blockData["difficulty"])
 		difficulty = 1000
 	}
-	
+
 	nonce, ok := blockData["nonce"].(float64)
 	if !ok {
 		log.Printf("Invalid nonce in block data: %v", blockData["nonce"])
@@ -765,6 +765,7 @@ func (h *RPCHandler) handleSubmitBlock(req *RPCRequest) *RPCResponse {
 
 	// Add block to blockchain
 	if err := h.blockchain.AddBlock(block); err != nil {
+		log.Printf("Failed to add block: %v", err)
 		return &RPCResponse{
 			JSONRPC: "2.0",
 			Error: &RPCError{
