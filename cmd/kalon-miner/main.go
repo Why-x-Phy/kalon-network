@@ -70,7 +70,16 @@ func parseFlags() *MinerConfig {
 	flag.BoolVar(&config.Stats, "stats", true, "Enable mining statistics")
 	flag.DurationVar(&config.StatsInterval, "stats-interval", 30*time.Second, "Statistics update interval")
 
+	// Version flag
+	showVersion := flag.Bool("version", false, "Show version information")
+
 	flag.Parse()
+
+	// Check for version flag
+	if *showVersion {
+		fmt.Printf("Kalon Miner v%s\n", version)
+		os.Exit(0)
+	}
 
 	return config
 }

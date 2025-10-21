@@ -80,7 +80,16 @@ func parseFlags() *Config {
 	flag.BoolVar(&config.Mining, "mining", false, "Enable mining")
 	flag.IntVar(&config.Threads, "threads", 1, "Number of mining threads")
 
+	// Version flag
+	showVersion := flag.Bool("version", false, "Show version information")
+
 	flag.Parse()
+
+	// Check for version flag
+	if *showVersion {
+		fmt.Printf("Kalon Node v%s\n", version)
+		os.Exit(0)
+	}
 
 	// Parse seed nodes from environment or use defaults
 	seedNodes := os.Getenv("KALON_SEED_NODES")
