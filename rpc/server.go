@@ -255,8 +255,13 @@ func (h *RPCHandler) handleGetBestBlock(req *RPCRequest) *RPCResponse {
 
 	return &RPCResponse{
 		JSONRPC: "2.0",
-		Result:  block,
-		ID:      req.ID,
+		Result: map[string]interface{}{
+			"number":     float64(block.Header.Number),
+			"difficulty": float64(block.Header.Difficulty),
+			"hash":       block.Hash.String(),
+			"timestamp":  float64(block.Header.Timestamp.Unix()),
+		},
+		ID: req.ID,
 	}
 }
 
@@ -731,12 +736,30 @@ func (h *RPCHandler) handleSubmitBlock(req *RPCRequest) *RPCResponse {
 		}
 	}
 
-	// Convert block data to core.Block (simplified)
+	// Convert block data to core.Block (with nil checks)
+	number, ok := blockData["number"].(float64)
+	if !ok {
+		log.Printf("Invalid number in block data: %v", blockData["number"])
+		number = 0
+	}
+	
+	difficulty, ok := blockData["difficulty"].(float64)
+	if !ok {
+		log.Printf("Invalid difficulty in block data: %v", blockData["difficulty"])
+		difficulty = 1000
+	}
+	
+	nonce, ok := blockData["nonce"].(float64)
+	if !ok {
+		log.Printf("Invalid nonce in block data: %v", blockData["nonce"])
+		nonce = 0
+	}
+
 	block := &core.Block{
 		Header: core.BlockHeader{
-			Number:     uint64(blockData["number"].(float64)),
-			Difficulty: uint64(blockData["difficulty"].(float64)),
-			Nonce:      uint64(blockData["nonce"].(float64)),
+			Number:     uint64(number),
+			Difficulty: uint64(difficulty),
+			Nonce:      uint64(nonce),
 		},
 	}
 
