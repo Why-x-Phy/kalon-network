@@ -113,7 +113,13 @@ func (mc *MinerCLI) Initialize() error {
 
 		log.Printf("Created new wallet: %s", address)
 	} else {
-		// In a real implementation, you would load the wallet from the address
+		// Create a wallet for the provided address
+		// In a real implementation, you would load the wallet from storage
+		wallet, err := crypto.NewWallet("")
+		if err != nil {
+			return fmt.Errorf("failed to create wallet for address: %v", err)
+		}
+		mc.wallet = wallet
 		log.Printf("Using provided wallet: %s", mc.config.Wallet)
 	}
 
