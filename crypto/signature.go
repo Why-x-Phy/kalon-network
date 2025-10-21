@@ -57,28 +57,28 @@ func createTransactionMessage(tx *core.Transaction) []byte {
 	data := make([]byte, 0, 200)
 	data = append(data, tx.From.Bytes()...)
 	data = append(data, tx.To.Bytes()...)
-	
+
 	// Use compatible binary encoding for older Go versions
 	amountBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(amountBytes, tx.Amount)
 	data = append(data, amountBytes...)
-	
+
 	nonceBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(nonceBytes, tx.Nonce)
 	data = append(data, nonceBytes...)
-	
+
 	feeBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(feeBytes, tx.Fee)
 	data = append(data, feeBytes...)
-	
+
 	gasUsedBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(gasUsedBytes, tx.GasUsed)
 	data = append(data, gasUsedBytes...)
-	
+
 	gasPriceBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(gasPriceBytes, tx.GasPrice)
 	data = append(data, gasPriceBytes...)
-	
+
 	data = append(data, tx.Data...)
 
 	return data
@@ -107,15 +107,39 @@ func createBlockMessage(block *core.Block) []byte {
 	// Create message from block header fields
 	data := make([]byte, 0, 200)
 	data = append(data, block.Header.ParentHash.Bytes()...)
-	data = binary.BigEndian.AppendUint64(data, block.Header.Number)
-	data = binary.BigEndian.AppendUint64(data, uint64(block.Header.Timestamp.Unix()))
-	data = binary.BigEndian.AppendUint64(data, block.Header.Difficulty)
+	
+	// Use compatible binary encoding for older Go versions
+	numberBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(numberBytes, block.Header.Number)
+	data = append(data, numberBytes...)
+	
+	timestampBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(timestampBytes, uint64(block.Header.Timestamp.Unix()))
+	data = append(data, timestampBytes...)
+	
+	difficultyBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(difficultyBytes, block.Header.Difficulty)
+	data = append(data, difficultyBytes...)
+	
 	data = append(data, block.Header.Miner.Bytes()...)
-	data = binary.BigEndian.AppendUint64(data, block.Header.Nonce)
+	
+	nonceBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(nonceBytes, block.Header.Nonce)
+	data = append(data, nonceBytes...)
+	
 	data = append(data, block.Header.MerkleRoot.Bytes()...)
-	data = binary.BigEndian.AppendUint32(data, block.Header.TxCount)
-	data = binary.BigEndian.AppendUint64(data, block.Header.NetworkFee)
-	data = binary.BigEndian.AppendUint64(data, block.Header.TreasuryFee)
+	
+	txCountBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(txCountBytes, block.Header.TxCount)
+	data = append(data, txCountBytes...)
+	
+	networkFeeBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(networkFeeBytes, block.Header.NetworkFee)
+	data = append(data, networkFeeBytes...)
+	
+	treasuryFeeBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(treasuryFeeBytes, block.Header.TreasuryFee)
+	data = append(data, treasuryFeeBytes...)
 
 	return data
 }
