@@ -766,11 +766,12 @@ func (h *RPCHandler) handleSubmitBlock(req *RPCRequest) *RPCResponse {
 	// Add block to blockchain
 	if err := h.blockchain.AddBlock(block); err != nil {
 		log.Printf("Failed to add block: %v", err)
+		// Don't crash the node, just return error
 		return &RPCResponse{
 			JSONRPC: "2.0",
 			Error: &RPCError{
 				Code:    -32603,
-				Message: "Internal error",
+				Message: "Block validation failed",
 				Data:    fmt.Sprintf("Failed to add block: %v", err),
 			},
 			ID: req.ID,

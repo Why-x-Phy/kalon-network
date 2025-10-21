@@ -379,7 +379,11 @@ func (rpc *RPCBlockchain) CreateNewBlock(miner core.Address, txs []core.Transact
 		hashBytes, err := hex.DecodeString(parentHashStr)
 		if err == nil && len(hashBytes) == 32 {
 			copy(parentHash[:], hashBytes)
+		} else {
+			log.Printf("Failed to parse parent hash: %s, error: %v", parentHashStr, err)
 		}
+	} else {
+		log.Printf("No parent hash in template: %v", templateData)
 	}
 
 	// Convert to core.Block
