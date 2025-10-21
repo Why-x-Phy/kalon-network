@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/kalon-network/kalon/core"
 	"github.com/kalon-network/kalon/crypto"
 	"github.com/kalon-network/kalon/mining"
 )
@@ -116,9 +117,11 @@ func (mc *MinerCLI) Initialize() error {
 		log.Printf("Using provided wallet: %s", mc.config.Wallet)
 	}
 
-	// Create miner (simplified - in real implementation would connect to blockchain)
-	// For now, we'll create a mock blockchain interface
-	mc.miner = mining.NewMiner(nil, mc.wallet, mc.config.Threads)
+	// Create mock blockchain for mining
+	mockBlockchain := &MockBlockchain{}
+	
+	// Create miner with mock blockchain
+	mc.miner = mining.NewMiner(mockBlockchain, mc.wallet, mc.config.Threads)
 
 	log.Printf("Miner initialized successfully")
 	return nil
@@ -208,4 +211,95 @@ func waitForShutdown(minerCLI *MinerCLI) {
 	}
 
 	os.Exit(0)
+}
+
+// MockBlockchain implements the mining.Blockchain interface for testing
+type MockBlockchain struct {
+	bestBlock *core.Block
+	height    uint64
+}
+
+// GetBestBlock returns the best block
+func (mb *MockBlockchain) GetBestBlock() *core.Block {
+	if mb.bestBlock == nil {
+		// Create genesis block
+		mb.bestBlock = &core.Block{
+			Header: core.BlockHeader{
+				Number:     0,
+				Timestamp:  time.Now(),
+				Difficulty: 1000,
+				Miner:      core.Address{},
+				Nonce:      0,
+			},
+		}
+		mb.height = 0
+	}
+	return mb.bestBlock
+}
+
+// CreateNewBlock creates a new block to mine
+func (mb *MockBlockchain) CreateNewBlock(miner core.Address, txs []core.Transaction) *core.Block {
+	bestBlock := mb.GetBestBlock()
+	
+	return &core.Block{
+		Header: core.BlockHeader{
+			ParentHash:  bestBlock.Hash,
+			Number:      bestBlock.Header.Number + 1,
+			Timestamp:   time.Now(),
+			Difficulty:  mb.GetConsensus().CalculateDifficulty(bestBlock.Header.Number+1, bestBlock),
+			Miner:       miner,
+			Nonce:       0,
+			TxCount:     uint32(len(txs)),
+		},
+		Transactions: txs,
+	}
+}
+
+// AddBlock adds a block to the blockchain
+func (mb *MockBlockchain) AddBlock(block *core.Block) error {
+	mb.bestBlock = block
+	mb.height = block.Header.Number
+	log.Printf("✅ Block #%d added to blockchain: %x", block.Header.Number, block.Hash)
+	return nil
+}
+
+// GetConsensus returns the consensus manager
+func (mb *MockBlockchain) GetConsensus() mining.Consensus {
+	return &MockConsensus{}
+}
+
+// MockConsensus implements the mining.Consensus interface
+type MockConsensus struct{}
+
+// CalculateDifficulty calculates the difficulty for a block
+func (mc *MockConsensus) CalculateDifficulty(height uint64, parent *core.Block) uint64 {
+	// Simple difficulty calculation for testing
+	baseDifficulty := uint64(1000)
+	if height > 100 {
+		return baseDifficulty * 2
+	}
+	return baseDifficulty
+}
+
+// CalculateTarget calculates the target hash for mining
+func (mc *MockConsensus) CalculateTarget(difficulty uint64) []byte {
+	// Simple target calculation
+	target := make([]byte, 32)
+	for i := 0; i < 32; i++ {
+		if difficulty > uint64(i*8) {
+			target[i] = 0xFF
+		} else {
+			target[i] = 0x00
+		}
+	}
+	return target
+}
+
+// ValidateBlock validates a block
+func (mc *MockConsensus) ValidateBlock(block *core.Block, parent *core.Block) error {
+	// Simple validation for testing
+	if block.Header.Number != parent.Header.Number+1 {
+		return fmt.Errorf("invalid block number")
+	}
+	return nil
 }
