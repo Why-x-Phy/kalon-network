@@ -119,7 +119,7 @@ func (mc *MinerCLI) Initialize() error {
 
 	// Create mock blockchain for mining
 	mockBlockchain := &MockBlockchain{}
-	
+
 	// Create miner with mock blockchain
 	mc.miner = mining.NewMiner(mockBlockchain, mc.wallet, mc.config.Threads)
 
@@ -175,13 +175,13 @@ func (mc *MinerCLI) miningLoop() {
 	// Keep mining running
 	for mc.running {
 		time.Sleep(30 * time.Second)
-		
+
 		if !mc.miner.IsRunning() {
 			break
 		}
-		
+
 		stats := mc.miner.GetStats()
-		log.Printf("Mining Stats - Threads: %d, Hash Rate: %.2f H/s, Blocks Found: %d", 
+		log.Printf("Mining Stats - Threads: %d, Hash Rate: %.2f H/s, Blocks Found: %d",
 			mc.config.Threads, stats.CurrentHashRate, stats.BlocksFound)
 	}
 }
@@ -240,18 +240,18 @@ func (mb *MockBlockchain) GetBestBlock() *core.Block {
 // CreateNewBlock creates a new block to mine
 func (mb *MockBlockchain) CreateNewBlock(miner core.Address, txs []core.Transaction) *core.Block {
 	bestBlock := mb.GetBestBlock()
-	
+
 	return &core.Block{
 		Header: core.BlockHeader{
-			ParentHash:  bestBlock.Hash,
-			Number:      bestBlock.Header.Number + 1,
-			Timestamp:   time.Now(),
-			Difficulty:  mb.GetConsensus().CalculateDifficulty(bestBlock.Header.Number+1, bestBlock),
-			Miner:       miner,
-			Nonce:       0,
-			TxCount:     uint32(len(txs)),
+			ParentHash: bestBlock.Hash,
+			Number:     bestBlock.Header.Number + 1,
+			Timestamp:  time.Now(),
+			Difficulty: mb.GetConsensus().CalculateDifficulty(bestBlock.Header.Number+1, bestBlock),
+			Miner:      miner,
+			Nonce:      0,
+			TxCount:    uint32(len(txs)),
 		},
-		Transactions: txs,
+		Txs: txs,
 	}
 }
 
