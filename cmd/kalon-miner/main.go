@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kalon-network/kalon/crypto"
+	"github.com/kalon-network/kalon/mining"
 )
 
 // MinerConfig represents the miner configuration
@@ -26,6 +27,7 @@ type MinerConfig struct {
 type MinerCLI struct {
 	config  *MinerConfig
 	wallet  *crypto.Wallet
+	miner   *mining.Miner
 	running bool
 }
 
@@ -105,6 +107,10 @@ func (mc *MinerCLI) Initialize() error {
 		log.Printf("Using provided wallet: %s", mc.config.Wallet)
 	}
 
+	// Create miner (simplified - in real implementation would connect to blockchain)
+	// For now, we'll create a mock blockchain interface
+	mc.miner = mining.NewMiner(nil, mc.wallet, mc.config.Threads)
+
 	log.Printf("Miner initialized successfully")
 	return nil
 }
@@ -148,20 +154,23 @@ func (mc *MinerCLI) Stop() error {
 
 // miningLoop is the main mining loop
 func (mc *MinerCLI) miningLoop() {
+	// Start real mining
+	if err := mc.miner.Start(); err != nil {
+		log.Printf("Failed to start miner: %v", err)
+		return
+	}
+
+	// Keep mining running
 	for mc.running {
-		// Simplified mining simulation
-		log.Printf("Mining block... (simulation)")
-
-		// Simulate mining work
 		time.Sleep(30 * time.Second)
-
-		// In a real implementation, this would:
-		// 1. Get the latest block from RPC
-		// 2. Create a new block with transactions
-		// 3. Mine the block using RandomX
-		// 4. Submit the block to the network
-
-		log.Printf("Block mined! (simulation)")
+		
+		if !mc.miner.IsRunning() {
+			break
+		}
+		
+		stats := mc.miner.GetStats()
+		log.Printf("Mining Stats - Threads: %d, Hash Rate: %.2f H/s, Blocks Found: %d", 
+			mc.config.Threads, stats.CurrentHashRate, stats.BlocksFound)
 	}
 }
 

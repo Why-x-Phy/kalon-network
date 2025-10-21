@@ -153,6 +153,11 @@ func (w *Wallet) GetAddressString() (string, error) {
 	return AddressToBech32(w.Address, "kalon")
 }
 
+// GetAddress returns the wallet address
+func (w *Wallet) GetAddress() core.Address {
+	return core.Address(w.Address)
+}
+
 // SignTransaction signs a transaction
 func (w *Wallet) SignTransaction(tx *core.Transaction) error {
 	// Create message to sign (transaction data without signature)
