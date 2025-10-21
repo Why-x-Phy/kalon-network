@@ -136,8 +136,11 @@ func (n *Node) Initialize() error {
 	blockchain := core.NewBlockchain(n.genesis, n.storage)
 	n.blockchain = blockchain
 
+	// Create RPC blockchain adapter
+	rpcBlockchain := &RPCBlockchainAdapter{blockchain: n.blockchain}
+	
 	// Initialize RPC server
-	n.rpcServer = rpc.NewServer(n.config.RPCAddr, n.blockchain, nil, nil)
+	n.rpcServer = rpc.NewServer(n.config.RPCAddr, rpcBlockchain, nil, nil)
 
 	log.Printf("Node initialized successfully")
 	return nil
@@ -259,4 +262,93 @@ func waitForShutdown(node *Node) {
 	}
 
 	os.Exit(0)
+}
+
+// RPCBlockchainAdapter adapts core.Blockchain to rpc.Blockchain interface
+type RPCBlockchainAdapter struct {
+	blockchain *core.Blockchain
+}
+
+// GetBestBlock returns the best block
+func (rba *RPCBlockchainAdapter) GetBestBlock() *core.Block {
+	return rba.blockchain.GetBestBlock()
+}
+
+// GetBlockByHash returns a block by hash
+func (rba *RPCBlockchainAdapter) GetBlockByHash(hash core.Hash) *core.Block {
+	return rba.blockchain.GetBlockByHash(hash)
+}
+
+// GetBlockByNumber returns a block by number
+func (rba *RPCBlockchainAdapter) GetBlockByNumber(number uint64) *core.Block {
+	return rba.blockchain.GetBlockByNumber(number)
+}
+
+// GetHeight returns the current blockchain height
+func (rba *RPCBlockchainAdapter) GetHeight() uint64 {
+	return rba.blockchain.GetHeight()
+}
+
+// GetBalance returns the balance of an address
+func (rba *RPCBlockchainAdapter) GetBalance(address core.Address) uint64 {
+	return rba.blockchain.GetBalance(address)
+}
+
+// GetTreasuryBalance returns treasury balance information
+func (rba *RPCBlockchainAdapter) GetTreasuryBalance() *core.TreasuryBalance {
+	return rba.blockchain.GetTreasuryBalance()
+}
+
+// ValidateTransaction validates a transaction
+func (rba *RPCBlockchainAdapter) ValidateTransaction(tx *core.Transaction) error {
+	return rba.blockchain.ValidateTransaction(tx)
+}
+
+// AddTransaction adds a transaction to the mempool
+func (rba *RPCBlockchainAdapter) AddTransaction(tx *core.Transaction) error {
+	return rba.blockchain.AddTransaction(tx)
+}
+
+// CreateNewBlock creates a new block
+func (rba *RPCBlockchainAdapter) CreateNewBlock(miner core.Address, txs []core.Transaction) *core.Block {
+	return rba.blockchain.CreateNewBlock(miner, txs)
+}
+
+// AddBlock adds a block to the blockchain
+func (rba *RPCBlockchainAdapter) AddBlock(block *core.Block) error {
+	return rba.blockchain.AddBlock(block)
+}
+
+// GetConsensus returns the consensus manager as rpc.Consensus
+func (rba *RPCBlockchainAdapter) GetConsensus() rpc.Consensus {
+	return &RPCConsensusAdapter{consensus: rba.blockchain.GetConsensus()}
+}
+
+// RPCConsensusAdapter adapts core.ConsensusManager to rpc.Consensus interface
+type RPCConsensusAdapter struct {
+	consensus *core.ConsensusManager
+}
+
+// CalculateDifficulty calculates the difficulty for a block
+func (rca *RPCConsensusAdapter) CalculateDifficulty(height uint64, parent *core.Block) uint64 {
+	return rca.consensus.CalculateDifficulty(height, parent)
+}
+
+// CalculateTarget calculates the target hash for mining
+func (rca *RPCConsensusAdapter) CalculateTarget(difficulty uint64) []byte {
+	// Simple target calculation
+	target := make([]byte, 32)
+	for i := 0; i < 32; i++ {
+		if difficulty > uint64(i*8) {
+			target[i] = 0xFF
+		} else {
+			target[i] = 0x00
+		}
+	}
+	return target
+}
+
+// ValidateBlock validates a block
+func (rca *RPCConsensusAdapter) ValidateBlock(block *core.Block, parent *core.Block) error {
+	return rca.consensus.ValidateBlock(block, parent)
 }
