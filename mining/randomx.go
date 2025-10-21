@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"sync"
 	"time"
+
+	"github.com/kalon-network/kalon/core"
 )
 
 // RandomXMiner handles CPU mining using RandomX algorithm
@@ -30,24 +32,10 @@ type HashResult struct {
 
 // MiningBlock represents a block being mined
 type MiningBlock struct {
-	Header     BlockHeader
+	Header     core.BlockHeader
 	Target     []byte
 	StartNonce uint64
 	EndNonce   uint64
-}
-
-// BlockHeader represents a block header for mining
-type BlockHeader struct {
-	ParentHash  [32]byte
-	Number      uint64
-	Timestamp   time.Time
-	Difficulty  uint64
-	Miner       [20]byte
-	Nonce       uint64
-	MerkleRoot  [32]byte
-	TxCount     uint32
-	NetworkFee  uint64
-	TreasuryFee uint64
 }
 
 // MiningStats represents mining statistics
@@ -235,7 +223,7 @@ func (rm *RandomXMiner) calculateHash(header BlockHeader) [32]byte {
 }
 
 // createHeaderData creates the data to hash from block header
-func (rm *RandomXMiner) createHeaderData(header BlockHeader) []byte {
+func (rm *RandomXMiner) createHeaderData(header core.BlockHeader) []byte {
 	data := make([]byte, 0, 200)
 	data = append(data, header.ParentHash[:]...)
 	data = binary.BigEndian.AppendUint64(data, header.Number)

@@ -6,6 +6,8 @@ import (
 	"log"
 	"sync"
 	"time"
+
+	"github.com/kalon-network/kalon/core"
 )
 
 // Miner represents the main mining coordinator
@@ -20,44 +22,23 @@ type Miner struct {
 
 // Blockchain interface for mining
 type Blockchain interface {
-	GetBestBlock() *Block
-	CreateBlock(miner [20]byte, txs []Transaction) *Block
-	AddBlock(block *Block) error
+	GetBestBlock() *core.Block
+	CreateNewBlock(miner core.Address, txs []core.Transaction) *core.Block
+	AddBlock(block *core.Block) error
 	GetConsensus() Consensus
-}
-
-// Block represents a blockchain block
-type Block struct {
-	Header BlockHeader
-	Txs    []Transaction
-	Hash   [32]byte
-}
-
-// Transaction represents a blockchain transaction
-type Transaction struct {
-	From      [20]byte
-	To        [20]byte
-	Amount    uint64
-	Nonce     uint64
-	Fee       uint64
-	GasUsed   uint64
-	GasPrice  uint64
-	Data      []byte
-	Signature []byte
-	Hash      [32]byte
 }
 
 // Consensus interface for mining
 type Consensus interface {
-	CalculateDifficulty(height uint64, parent *Block) uint64
+	CalculateDifficulty(height uint64, parent *core.Block) uint64
 	CalculateTarget(difficulty uint64) []byte
-	ValidateBlock(block *Block, parent *Block) error
+	ValidateBlock(block *core.Block, parent *core.Block) error
 }
 
 // Wallet interface for mining
 type Wallet interface {
-	GetAddress() [20]byte
-	SignTransaction(tx *Transaction) error
+	GetAddress() core.Address
+	SignTransaction(tx *core.Transaction) error
 }
 
 // MinerStats represents miner statistics
@@ -177,7 +158,7 @@ func (m *Miner) createMiningBlock() *MiningBlock {
 	}
 
 	// Create new block
-	newBlock := m.blockchain.CreateBlock(m.wallet.GetAddress(), []Transaction{})
+	newBlock := m.blockchain.CreateNewBlock(m.wallet.GetAddress(), []core.Transaction{})
 	if newBlock == nil {
 		return nil
 	}
@@ -244,7 +225,7 @@ func (m *Miner) handleFoundBlock(result HashResult) {
 
 	// Create block with found nonce
 	bestBlock := m.blockchain.GetBestBlock()
-	newBlock := m.blockchain.CreateBlock(m.wallet.GetAddress(), []Transaction{})
+	newBlock := m.blockchain.CreateNewBlock(m.wallet.GetAddress(), []core.Transaction{})
 	if newBlock == nil {
 		log.Println("Failed to create block")
 		return

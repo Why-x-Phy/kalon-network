@@ -1,12 +1,14 @@
 package rpc
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
-	"strconv"
 	"time"
+
+	"github.com/kalon-network/kalon/core"
 )
 
 // Server represents the JSON-RPC server
@@ -20,22 +22,22 @@ type Server struct {
 
 // Blockchain interface for RPC
 type Blockchain interface {
-	GetBestBlock() *Block
-	GetBlockByHash(hash [32]byte) *Block
-	GetBlockByNumber(number uint64) *Block
+	GetBestBlock() *core.Block
+	GetBlockByHash(hash core.Hash) *core.Block
+	GetBlockByNumber(number uint64) *core.Block
 	GetHeight() uint64
-	GetBalance(address [20]byte) uint64
-	GetTreasuryBalance() *TreasuryBalance
-	ValidateTransaction(tx *Transaction) error
-	AddTransaction(tx *Transaction) error
+	GetBalance(address core.Address) uint64
+	GetTreasuryBalance() *core.TreasuryBalance
+	ValidateTransaction(tx *core.Transaction) error
+	AddTransaction(tx *core.Transaction) error
 }
 
 // P2P interface for RPC
 type P2P interface {
 	GetPeerCount() int
 	GetPeers() []*Peer
-	BroadcastBlock(block *Block) error
-	BroadcastTransaction(tx *Transaction) error
+	BroadcastBlock(block *core.Block) error
+	BroadcastTransaction(tx *core.Transaction) error
 }
 
 // Miner interface for RPC
@@ -48,40 +50,7 @@ type Miner interface {
 	GetBlocksFound() uint64
 }
 
-// Block represents a blockchain block
-type Block struct {
-	Header BlockHeader   `json:"header"`
-	Txs    []Transaction `json:"transactions"`
-	Hash   [32]byte      `json:"hash"`
-}
-
-// BlockHeader represents a block header
-type BlockHeader struct {
-	ParentHash  [32]byte  `json:"parentHash"`
-	Number      uint64    `json:"number"`
-	Timestamp   time.Time `json:"timestamp"`
-	Difficulty  uint64    `json:"difficulty"`
-	Miner       [20]byte  `json:"miner"`
-	Nonce       uint64    `json:"nonce"`
-	MerkleRoot  [32]byte  `json:"merkleRoot"`
-	TxCount     uint32    `json:"txCount"`
-	NetworkFee  uint64    `json:"networkFee"`
-	TreasuryFee uint64    `json:"treasuryFee"`
-}
-
-// Transaction represents a blockchain transaction
-type Transaction struct {
-	From      [20]byte `json:"from"`
-	To        [20]byte `json:"to"`
-	Amount    uint64   `json:"amount"`
-	Nonce     uint64   `json:"nonce"`
-	Fee       uint64   `json:"fee"`
-	GasUsed   uint64   `json:"gasUsed"`
-	GasPrice  uint64   `json:"gasPrice"`
-	Data      []byte   `json:"data"`
-	Signature []byte   `json:"signature"`
-	Hash      [32]byte `json:"hash"`
-}
+// Use core types directly
 
 // Peer represents a P2P peer
 type Peer struct {
@@ -93,14 +62,7 @@ type Peer struct {
 	LastSeen  time.Time `json:"lastSeen"`
 }
 
-// TreasuryBalance represents treasury balance
-type TreasuryBalance struct {
-	Address     string `json:"address"`
-	Balance     uint64 `json:"balance"`
-	BlockFees   uint64 `json:"blockFees"`
-	TxFees      uint64 `json:"txFees"`
-	TotalIncome uint64 `json:"totalIncome"`
-}
+// Use core.TreasuryBalance directly
 
 // MinerStats represents miner statistics
 type MinerStats struct {
@@ -309,8 +271,8 @@ func (h *RPCHandler) handleGetBlockByHash(req *RPCRequest) *RPCResponse {
 	}
 
 	// Parse hash
-	var hash [32]byte
-	if len(hashStr) != 64 {
+	hashBytes, err := hex.DecodeString(hashStr)
+	if err != nil || len(hashBytes) != 32 {
 		return &RPCResponse{
 			JSONRPC: "2.0",
 			Error: &RPCError{
@@ -322,22 +284,8 @@ func (h *RPCHandler) handleGetBlockByHash(req *RPCRequest) *RPCResponse {
 		}
 	}
 
-	// Convert hex string to bytes
-	for i := 0; i < 32; i++ {
-		b, err := strconv.ParseUint(hashStr[i*2:i*2+2], 16, 8)
-		if err != nil {
-			return &RPCResponse{
-				JSONRPC: "2.0",
-				Error: &RPCError{
-					Code:    -32602,
-					Message: "Invalid params",
-					Data:    "Invalid hash format",
-				},
-				ID: req.ID,
-			}
-		}
-		hash[i] = byte(b)
-	}
+	var hash core.Hash
+	copy(hash[:], hashBytes)
 
 	block := h.blockchain.GetBlockByHash(hash)
 	if block == nil {
@@ -444,8 +392,8 @@ func (h *RPCHandler) handleGetBalance(req *RPCRequest) *RPCResponse {
 	}
 
 	// Parse address
-	var address [20]byte
-	if len(addressStr) != 40 {
+	addressBytes, err := hex.DecodeString(addressStr)
+	if err != nil || len(addressBytes) != 20 {
 		return &RPCResponse{
 			JSONRPC: "2.0",
 			Error: &RPCError{
@@ -457,22 +405,8 @@ func (h *RPCHandler) handleGetBalance(req *RPCRequest) *RPCResponse {
 		}
 	}
 
-	// Convert hex string to bytes
-	for i := 0; i < 20; i++ {
-		b, err := strconv.ParseUint(addressStr[i*2:i*2+2], 16, 8)
-		if err != nil {
-			return &RPCResponse{
-				JSONRPC: "2.0",
-				Error: &RPCError{
-					Code:    -32602,
-					Message: "Invalid params",
-					Data:    "Invalid address format",
-				},
-				ID: req.ID,
-			}
-		}
-		address[i] = byte(b)
-	}
+	var address core.Address
+	copy(address[:], addressBytes)
 
 	balance := h.blockchain.GetBalance(address)
 	return &RPCResponse{
@@ -520,7 +454,7 @@ func (h *RPCHandler) handleSendTransaction(req *RPCRequest) *RPCResponse {
 		}
 	}
 
-	var tx Transaction
+	var tx core.Transaction
 	if err := json.Unmarshal(txData, &tx); err != nil {
 		return &RPCResponse{
 			JSONRPC: "2.0",

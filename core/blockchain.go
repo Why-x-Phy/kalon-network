@@ -204,6 +204,22 @@ func (bc *Blockchain) GetMempoolSize() int {
 	return 0
 }
 
+// GetTreasuryBalance returns treasury balance information
+func (bc *Blockchain) GetTreasuryBalance() *TreasuryBalance {
+	return &TreasuryBalance{
+		Address:     bc.genesis.TreasuryAddress,
+		Balance:     0, // Simplified
+		BlockFees:   0,
+		TxFees:      0,
+		TotalIncome: 0,
+	}
+}
+
+// GetConsensus returns the consensus manager
+func (bc *Blockchain) GetConsensus() *ConsensusManager {
+	return bc.consensus
+}
+
 // persistBlock persists a block to storage
 func (bc *Blockchain) persistBlock(block *Block) {
 	// Skip persistence for now to avoid nil pointer issues

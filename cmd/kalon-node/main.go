@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/kalon-network/kalon/core"
+	"github.com/kalon-network/kalon/rpc"
 	"github.com/kalon-network/kalon/storage"
 )
 
@@ -34,6 +35,7 @@ type Node struct {
 	genesis    *core.GenesisConfig
 	blockchain *core.Blockchain
 	storage    *storage.LevelDBStorage
+	rpcServer  *rpc.Server
 	running    bool
 	mu         sync.RWMutex
 }
@@ -125,6 +127,9 @@ func (n *Node) Initialize() error {
 	blockchain := core.NewBlockchain(n.genesis, n.storage)
 	n.blockchain = blockchain
 
+	// Initialize RPC server
+	n.rpcServer = rpc.NewServer(n.config.RPCAddr, n.blockchain, nil, nil)
+
 	log.Printf("Node initialized successfully")
 	return nil
 }
@@ -144,6 +149,13 @@ func (n *Node) Start() error {
 	log.Printf("P2P address: %s", n.config.P2PAddr)
 
 	n.running = true
+
+	// Start RPC server
+	go func() {
+		if err := n.rpcServer.Start(); err != nil {
+			log.Printf("RPC server error: %v", err)
+		}
+	}()
 
 	// Start background processes
 	go n.processBlocks()
