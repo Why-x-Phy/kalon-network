@@ -364,6 +364,8 @@ func (rpc *RPCBlockchain) CreateNewBlock(miner core.Address, txs []core.Transact
 		}
 	}
 
+	log.Printf("RPC Response: %+v", resp)
+
 	// Parse block template from response
 	templateData, ok := resp.Result.(map[string]interface{})
 	if !ok {

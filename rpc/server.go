@@ -778,6 +778,8 @@ func (h *RPCHandler) handleSubmitBlock(req *RPCRequest) *RPCResponse {
 		}
 	}
 
+	log.Printf("✅ Block #%d added successfully", block.Header.Number)
+
 	return &RPCResponse{
 		JSONRPC: "2.0",
 		Result: map[string]interface{}{
