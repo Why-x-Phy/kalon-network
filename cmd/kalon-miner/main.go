@@ -132,7 +132,7 @@ func (mc *MinerCLI) Initialize() error {
 	if err != nil {
 		return fmt.Errorf("failed to create RPC blockchain client: %v", err)
 	}
-	
+
 	// Create miner with RPC blockchain
 	mc.miner = mining.NewMiner(rpcBlockchain, mc.wallet, mc.config.Threads)
 
@@ -274,22 +274,41 @@ func (rpc *RPCBlockchain) GetBestBlock() *core.Block {
 	resp, err := rpc.callRPC(req)
 	if err != nil {
 		log.Printf("Failed to get best block: %v", err)
-		return nil
+		// Return a fallback block if RPC fails
+		return &core.Block{
+			Header: core.BlockHeader{
+				Number:     0,
+				Timestamp:  time.Now(),
+				Difficulty: 1000,
+			},
+		}
 	}
 
 	// Parse block from response
 	blockData, ok := resp.Result.(map[string]interface{})
 	if !ok {
-		log.Printf("Invalid block response format")
+		log.Printf("Invalid block response format: %v", resp.Result)
 		return nil
 	}
 
-	// Convert to core.Block (simplified)
+	// Convert to core.Block (simplified with nil checks)
+	number, ok := blockData["number"].(float64)
+	if !ok {
+		log.Printf("Invalid number in block response")
+		return nil
+	}
+	
+	difficulty, ok := blockData["difficulty"].(float64)
+	if !ok {
+		log.Printf("Invalid difficulty in block response")
+		return nil
+	}
+
 	block := &core.Block{
 		Header: core.BlockHeader{
-			Number:     uint64(blockData["number"].(float64)),
+			Number:     uint64(number),
 			Timestamp:  time.Now(), // Simplified
-			Difficulty: uint64(blockData["difficulty"].(float64)),
+			Difficulty: uint64(difficulty),
 		},
 	}
 
@@ -310,7 +329,17 @@ func (rpc *RPCBlockchain) CreateNewBlock(miner core.Address, txs []core.Transact
 	resp, err := rpc.callRPC(req)
 	if err != nil {
 		log.Printf("Failed to create block template: %v", err)
-		return nil
+		// Return a fallback block template if RPC fails
+		return &core.Block{
+			Header: core.BlockHeader{
+				Number:     1,
+				Timestamp:  time.Now(),
+				Difficulty: 1000,
+				Miner:      miner,
+				Nonce:      0,
+			},
+			Txs: txs,
+		}
 	}
 
 	// Parse block template from response
@@ -323,13 +352,13 @@ func (rpc *RPCBlockchain) CreateNewBlock(miner core.Address, txs []core.Transact
 	// Convert to core.Block
 	block := &core.Block{
 		Header: core.BlockHeader{
-			ParentHash:  core.Hash{}, // Will be set from template
-			Number:      uint64(templateData["number"].(float64)),
-			Timestamp:   time.Now(),
-			Difficulty:  uint64(templateData["difficulty"].(float64)),
-			Miner:       miner,
-			Nonce:       0,
-			TxCount:     uint32(len(txs)),
+			ParentHash: core.Hash{}, // Will be set from template
+			Number:     uint64(templateData["number"].(float64)),
+			Timestamp:  time.Now(),
+			Difficulty: uint64(templateData["difficulty"].(float64)),
+			Miner:      miner,
+			Nonce:      0,
+			TxCount:    uint32(len(txs)),
 		},
 		Txs: txs,
 	}
