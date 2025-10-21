@@ -226,15 +226,39 @@ func (rm *RandomXMiner) calculateHash(header core.BlockHeader) [32]byte {
 func (rm *RandomXMiner) createHeaderData(header core.BlockHeader) []byte {
 	data := make([]byte, 0, 200)
 	data = append(data, header.ParentHash[:]...)
-	data = binary.BigEndian.AppendUint64(data, header.Number)
-	data = binary.BigEndian.AppendUint64(data, uint64(header.Timestamp.Unix()))
-	data = binary.BigEndian.AppendUint64(data, header.Difficulty)
+	
+	// Use compatible binary encoding for older Go versions
+	numberBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(numberBytes, header.Number)
+	data = append(data, numberBytes...)
+	
+	timestampBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(timestampBytes, uint64(header.Timestamp.Unix()))
+	data = append(data, timestampBytes...)
+	
+	difficultyBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(difficultyBytes, header.Difficulty)
+	data = append(data, difficultyBytes...)
+	
 	data = append(data, header.Miner[:]...)
-	data = binary.BigEndian.AppendUint64(data, header.Nonce)
+	
+	nonceBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(nonceBytes, header.Nonce)
+	data = append(data, nonceBytes...)
+	
 	data = append(data, header.MerkleRoot[:]...)
-	data = binary.BigEndian.AppendUint32(data, header.TxCount)
-	data = binary.BigEndian.AppendUint64(data, header.NetworkFee)
-	data = binary.BigEndian.AppendUint64(data, header.TreasuryFee)
+	
+	txCountBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(txCountBytes, header.TxCount)
+	data = append(data, txCountBytes...)
+	
+	networkFeeBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(networkFeeBytes, header.NetworkFee)
+	data = append(data, networkFeeBytes...)
+	
+	treasuryFeeBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(treasuryFeeBytes, header.TreasuryFee)
+	data = append(data, treasuryFeeBytes...)
 
 	return data
 }
