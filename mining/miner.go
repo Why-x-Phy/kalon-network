@@ -143,6 +143,7 @@ func (m *Miner) miningLoop() {
 			// Create new block to mine
 			block := m.createMiningBlock()
 			if block != nil {
+				log.Printf("Mining block #%d...", block.Header.Number)
 				m.mineBlock(block)
 			}
 		}
@@ -215,7 +216,7 @@ func (m *Miner) handleMiningResults() {
 
 // handleFoundBlock handles a found block
 func (m *Miner) handleFoundBlock(result HashResult) {
-	log.Printf("Block found! Hash: %x, Nonce: %d", result.Hash, result.Nonce)
+	log.Printf("🎉 Block found! Hash: %x, Nonce: %d", result.Hash, result.Nonce)
 
 	// Update stats
 	m.mu.Lock()
@@ -248,7 +249,7 @@ func (m *Miner) handleFoundBlock(result HashResult) {
 		return
 	}
 
-	log.Printf("Block added to blockchain: %x", newBlock.Hash)
+	log.Printf("✅ Block #%d added to blockchain: %x", newBlock.Header.Number, newBlock.Hash)
 }
 
 // updateStats updates miner statistics
