@@ -163,11 +163,28 @@ func (tx *Transaction) CalculateHash() Hash {
 	data := make([]byte, 0, 200)
 	data = append(data, tx.From.Bytes()...)
 	data = append(data, tx.To.Bytes()...)
-	data = binary.BigEndian.AppendUint64(data, tx.Amount)
-	data = binary.BigEndian.AppendUint64(data, tx.Nonce)
-	data = binary.BigEndian.AppendUint64(data, tx.Fee)
-	data = binary.BigEndian.AppendUint64(data, tx.GasUsed)
-	data = binary.BigEndian.AppendUint64(data, tx.GasPrice)
+	
+	// Use compatible binary encoding for older Go versions
+	amountBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(amountBytes, tx.Amount)
+	data = append(data, amountBytes...)
+	
+	nonceBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(nonceBytes, tx.Nonce)
+	data = append(data, nonceBytes...)
+	
+	feeBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(feeBytes, tx.Fee)
+	data = append(data, feeBytes...)
+	
+	gasUsedBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(gasUsedBytes, tx.GasUsed)
+	data = append(data, gasUsedBytes...)
+	
+	gasPriceBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(gasPriceBytes, tx.GasPrice)
+	data = append(data, gasPriceBytes...)
+	
 	data = append(data, tx.Data...)
 
 	hash := sha256.Sum256(data)
