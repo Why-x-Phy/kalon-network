@@ -64,8 +64,8 @@ fi
 if [ -z "$WALLET_ADDRESS" ]; then
     echo -e "${YELLOW}No wallet address provided. Creating new wallet...${NC}"
     
-    # Create wallet
-    WALLET_OUTPUT=$(./build/kalon-wallet create 2>&1)
+    # Create wallet with empty passphrase (non-interactive)
+    WALLET_OUTPUT=$(echo "" | ./build/kalon-wallet create 2>&1)
     WALLET_ADDRESS=$(echo "$WALLET_OUTPUT" | grep "Address:" | cut -d' ' -f2)
     
     if [ -z "$WALLET_ADDRESS" ]; then
