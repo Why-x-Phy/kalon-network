@@ -30,6 +30,16 @@ type Blockchain interface {
 	GetTreasuryBalance() *core.TreasuryBalance
 	ValidateTransaction(tx *core.Transaction) error
 	AddTransaction(tx *core.Transaction) error
+	CreateNewBlock(miner core.Address, txs []core.Transaction) *core.Block
+	AddBlock(block *core.Block) error
+	GetConsensus() Consensus
+}
+
+// Consensus interface for RPC
+type Consensus interface {
+	CalculateDifficulty(height uint64, parent *core.Block) uint64
+	CalculateTarget(difficulty uint64) []byte
+	ValidateBlock(block *core.Block, parent *core.Block) error
 }
 
 // P2P interface for RPC
@@ -209,6 +219,12 @@ func (h *RPCHandler) HandleRequest(req *RPCRequest) *RPCResponse {
 		return h.handleStopMining(req)
 	case "getNetworkInfo":
 		return h.handleGetNetworkInfo(req)
+	case "createBlockTemplate":
+		return h.handleCreateBlockTemplate(req)
+	case "submitBlock":
+		return h.handleSubmitBlock(req)
+	case "calculateDifficulty":
+		return h.handleCalculateDifficulty(req)
 	default:
 		return &RPCResponse{
 			JSONRPC: "2.0",
@@ -624,6 +640,172 @@ func (h *RPCHandler) handleGetNetworkInfo(req *RPCRequest) *RPCResponse {
 	return &RPCResponse{
 		JSONRPC: "2.0",
 		Result:  info,
+		ID:      req.ID,
+	}
+}
+
+// handleCreateBlockTemplate handles createBlockTemplate requests
+func (h *RPCHandler) handleCreateBlockTemplate(req *RPCRequest) *RPCResponse {
+	params, ok := req.Params.(map[string]interface{})
+	if !ok {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid params",
+			},
+			ID: req.ID,
+		}
+	}
+
+	minerStr, ok := params["miner"].(string)
+	if !ok {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid params",
+				Data:    "miner parameter required",
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Parse miner address
+	var miner core.Address
+	if err := miner.UnmarshalText([]byte(minerStr)); err != nil {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid params",
+				Data:    "Invalid miner address format",
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Create block template
+	block := h.blockchain.CreateNewBlock(miner, []core.Transaction{})
+	if block == nil {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32603,
+				Message: "Internal error",
+				Data:    "Failed to create block template",
+			},
+			ID: req.ID,
+		}
+	}
+
+	return &RPCResponse{
+		JSONRPC: "2.0",
+		Result: map[string]interface{}{
+			"number":     block.Header.Number,
+			"difficulty": block.Header.Difficulty,
+			"parentHash": block.Header.ParentHash.String(),
+			"timestamp":  block.Header.Timestamp.Unix(),
+			"miner":      block.Header.Miner.String(),
+		},
+		ID: req.ID,
+	}
+}
+
+// handleSubmitBlock handles submitBlock requests
+func (h *RPCHandler) handleSubmitBlock(req *RPCRequest) *RPCResponse {
+	params, ok := req.Params.(map[string]interface{})
+	if !ok {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid params",
+			},
+			ID: req.ID,
+		}
+	}
+
+	blockData, ok := params["block"].(map[string]interface{})
+	if !ok {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid params",
+				Data:    "block parameter required",
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Convert block data to core.Block (simplified)
+	block := &core.Block{
+		Header: core.BlockHeader{
+			Number:     uint64(blockData["number"].(float64)),
+			Difficulty: uint64(blockData["difficulty"].(float64)),
+			Nonce:      uint64(blockData["nonce"].(float64)),
+		},
+	}
+
+	// Add block to blockchain
+	if err := h.blockchain.AddBlock(block); err != nil {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32603,
+				Message: "Internal error",
+				Data:    fmt.Sprintf("Failed to add block: %v", err),
+			},
+			ID: req.ID,
+		}
+	}
+
+	return &RPCResponse{
+		JSONRPC: "2.0",
+		Result: map[string]interface{}{
+			"success": true,
+			"height":  block.Header.Number,
+		},
+		ID: req.ID,
+	}
+}
+
+// handleCalculateDifficulty handles calculateDifficulty requests
+func (h *RPCHandler) handleCalculateDifficulty(req *RPCRequest) *RPCResponse {
+	params, ok := req.Params.(map[string]interface{})
+	if !ok {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid params",
+			},
+			ID: req.ID,
+		}
+	}
+
+	height, ok := params["height"].(float64)
+	if !ok {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid params",
+				Data:    "height parameter required",
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Get consensus and calculate difficulty
+	consensus := h.blockchain.GetConsensus()
+	bestBlock := h.blockchain.GetBestBlock()
+	difficulty := consensus.CalculateDifficulty(uint64(height), bestBlock)
+
+	return &RPCResponse{
+		JSONRPC: "2.0",
+		Result:  difficulty,
 		ID:      req.ID,
 	}
 }

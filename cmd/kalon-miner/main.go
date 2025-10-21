@@ -1,9 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -123,11 +127,14 @@ func (mc *MinerCLI) Initialize() error {
 		log.Printf("Using provided wallet: %s", mc.config.Wallet)
 	}
 
-	// Create mock blockchain for mining
-	mockBlockchain := &MockBlockchain{}
-
-	// Create miner with mock blockchain
-	mc.miner = mining.NewMiner(mockBlockchain, mc.wallet, mc.config.Threads)
+	// Create RPC blockchain client for real node communication
+	rpcBlockchain, err := NewRPCBlockchain(mc.config.RPCURL)
+	if err != nil {
+		return fmt.Errorf("failed to create RPC blockchain client: %v", err)
+	}
+	
+	// Create miner with RPC blockchain
+	mc.miner = mining.NewMiner(rpcBlockchain, mc.wallet, mc.config.Threads)
 
 	log.Printf("Miner initialized successfully")
 	return nil
@@ -217,6 +224,231 @@ func waitForShutdown(minerCLI *MinerCLI) {
 	}
 
 	os.Exit(0)
+}
+
+// RPCBlockchain implements the mining.Blockchain interface via RPC
+type RPCBlockchain struct {
+	rpcURL string
+	client *http.Client
+}
+
+// NewRPCBlockchain creates a new RPC blockchain client
+func NewRPCBlockchain(rpcURL string) (*RPCBlockchain, error) {
+	return &RPCBlockchain{
+		rpcURL: rpcURL,
+		client: &http.Client{Timeout: 30 * time.Second},
+	}, nil
+}
+
+// RPCRequest represents a JSON-RPC request
+type RPCRequest struct {
+	JSONRPC string      `json:"jsonrpc"`
+	Method  string      `json:"method"`
+	Params  interface{} `json:"params"`
+	ID      int         `json:"id"`
+}
+
+// RPCResponse represents a JSON-RPC response
+type RPCResponse struct {
+	JSONRPC string      `json:"jsonrpc"`
+	Result  interface{} `json:"result"`
+	Error   *RPCError   `json:"error"`
+	ID      int         `json:"id"`
+}
+
+// RPCError represents an RPC error
+type RPCError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+// GetBestBlock returns the best block from the node
+func (rpc *RPCBlockchain) GetBestBlock() *core.Block {
+	req := RPCRequest{
+		JSONRPC: "2.0",
+		Method:  "getBestBlock",
+		Params:  map[string]interface{}{},
+		ID:      1,
+	}
+
+	resp, err := rpc.callRPC(req)
+	if err != nil {
+		log.Printf("Failed to get best block: %v", err)
+		return nil
+	}
+
+	// Parse block from response
+	blockData, ok := resp.Result.(map[string]interface{})
+	if !ok {
+		log.Printf("Invalid block response format")
+		return nil
+	}
+
+	// Convert to core.Block (simplified)
+	block := &core.Block{
+		Header: core.BlockHeader{
+			Number:     uint64(blockData["number"].(float64)),
+			Timestamp:  time.Now(), // Simplified
+			Difficulty: uint64(blockData["difficulty"].(float64)),
+		},
+	}
+
+	return block
+}
+
+// CreateNewBlock creates a new block template for mining
+func (rpc *RPCBlockchain) CreateNewBlock(miner core.Address, txs []core.Transaction) *core.Block {
+	req := RPCRequest{
+		JSONRPC: "2.0",
+		Method:  "createBlockTemplate",
+		Params: map[string]interface{}{
+			"miner": miner.String(),
+		},
+		ID: 2,
+	}
+
+	resp, err := rpc.callRPC(req)
+	if err != nil {
+		log.Printf("Failed to create block template: %v", err)
+		return nil
+	}
+
+	// Parse block template from response
+	templateData, ok := resp.Result.(map[string]interface{})
+	if !ok {
+		log.Printf("Invalid block template response format")
+		return nil
+	}
+
+	// Convert to core.Block
+	block := &core.Block{
+		Header: core.BlockHeader{
+			ParentHash:  core.Hash{}, // Will be set from template
+			Number:      uint64(templateData["number"].(float64)),
+			Timestamp:   time.Now(),
+			Difficulty:  uint64(templateData["difficulty"].(float64)),
+			Miner:       miner,
+			Nonce:       0,
+			TxCount:     uint32(len(txs)),
+		},
+		Txs: txs,
+	}
+
+	return block
+}
+
+// AddBlock submits a mined block to the node
+func (rpc *RPCBlockchain) AddBlock(block *core.Block) error {
+	req := RPCRequest{
+		JSONRPC: "2.0",
+		Method:  "submitBlock",
+		Params: map[string]interface{}{
+			"block": block,
+		},
+		ID: 3,
+	}
+
+	resp, err := rpc.callRPC(req)
+	if err != nil {
+		return fmt.Errorf("failed to submit block: %v", err)
+	}
+
+	if resp.Error != nil {
+		return fmt.Errorf("RPC error: %s", resp.Error.Message)
+	}
+
+	log.Printf("✅ Block #%d submitted to node: %x", block.Header.Number, block.Hash)
+	return nil
+}
+
+// GetConsensus returns the consensus manager
+func (rpc *RPCBlockchain) GetConsensus() mining.Consensus {
+	return &RPCConsensus{rpc: rpc}
+}
+
+// callRPC makes an RPC call to the node
+func (rpc *RPCBlockchain) callRPC(req RPCRequest) (*RPCResponse, error) {
+	jsonData, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+
+	httpReq, err := http.NewRequest("POST", rpc.rpcURL, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, err
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := rpc.client.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var rpcResp RPCResponse
+	if err := json.Unmarshal(body, &rpcResp); err != nil {
+		return nil, err
+	}
+
+	return &rpcResp, nil
+}
+
+// RPCConsensus implements the mining.Consensus interface via RPC
+type RPCConsensus struct {
+	rpc *RPCBlockchain
+}
+
+// CalculateDifficulty calculates the difficulty for a block
+func (rc *RPCConsensus) CalculateDifficulty(height uint64, parent *core.Block) uint64 {
+	req := RPCRequest{
+		JSONRPC: "2.0",
+		Method:  "calculateDifficulty",
+		Params: map[string]interface{}{
+			"height": height,
+		},
+		ID: 4,
+	}
+
+	resp, err := rc.rpc.callRPC(req)
+	if err != nil {
+		log.Printf("Failed to calculate difficulty: %v", err)
+		return 1000 // Fallback difficulty
+	}
+
+	if difficulty, ok := resp.Result.(float64); ok {
+		return uint64(difficulty)
+	}
+
+	return 1000 // Fallback difficulty
+}
+
+// CalculateTarget calculates the target hash for mining
+func (rc *RPCConsensus) CalculateTarget(difficulty uint64) []byte {
+	// Simple target calculation based on difficulty
+	target := make([]byte, 32)
+	for i := 0; i < 32; i++ {
+		if difficulty > uint64(i*8) {
+			target[i] = 0xFF
+		} else {
+			target[i] = 0x00
+		}
+	}
+	return target
+}
+
+// ValidateBlock validates a block
+func (rc *RPCConsensus) ValidateBlock(block *core.Block, parent *core.Block) error {
+	// Basic validation
+	if block.Header.Number != parent.Header.Number+1 {
+		return fmt.Errorf("invalid block number")
+	}
+	return nil
 }
 
 // MockBlockchain implements the mining.Blockchain interface for testing
