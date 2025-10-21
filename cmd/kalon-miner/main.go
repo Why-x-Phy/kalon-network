@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -370,10 +371,21 @@ func (rpc *RPCBlockchain) CreateNewBlock(miner core.Address, txs []core.Transact
 		return nil
 	}
 
+	// Parse parent hash from template
+	parentHashStr, ok := templateData["parentHash"].(string)
+	var parentHash core.Hash
+	if ok && parentHashStr != "" {
+		// Parse parent hash from string
+		hashBytes, err := hex.DecodeString(parentHashStr)
+		if err == nil && len(hashBytes) == 32 {
+			copy(parentHash[:], hashBytes)
+		}
+	}
+
 	// Convert to core.Block
 	block := &core.Block{
 		Header: core.BlockHeader{
-			ParentHash: core.Hash{}, // Will be set from template
+			ParentHash: parentHash,
 			Number:     uint64(templateData["number"].(float64)),
 			Timestamp:  time.Now(),
 			Difficulty: uint64(templateData["difficulty"].(float64)),

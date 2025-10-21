@@ -34,7 +34,7 @@ func (cm *ConsensusManager) ValidateBlock(block *Block, parent *Block) error {
 
 	// Validate parent hash
 	if parent != nil && block.Header.ParentHash != parent.Hash {
-		return fmt.Errorf("invalid parent hash")
+		return fmt.Errorf("invalid parent hash: expected %x, got %x", parent.Hash, block.Header.ParentHash)
 	}
 
 	// Validate timestamp
