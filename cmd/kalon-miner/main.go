@@ -415,6 +415,8 @@ func (rpc *RPCBlockchain) CreateNewBlock(miner core.Address, txs []core.Transact
 		Txs: txs,
 	}
 
+	log.Printf("Created block with parent hash: %x", block.Header.ParentHash)
+
 	return block
 }
 
