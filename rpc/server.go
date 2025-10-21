@@ -696,6 +696,8 @@ func (h *RPCHandler) handleCreateBlockTemplate(req *RPCRequest) *RPCResponse {
 		}
 	}
 
+	log.Printf("Created block template #%d with parent hash: %x", block.Header.Number, block.Header.ParentHash)
+
 	return &RPCResponse{
 		JSONRPC: "2.0",
 		Result: map[string]interface{}{
@@ -765,7 +767,8 @@ func (h *RPCHandler) handleSubmitBlock(req *RPCRequest) *RPCResponse {
 
 	// Add block to blockchain
 	if err := h.blockchain.AddBlock(block); err != nil {
-		log.Printf("Failed to add block: %v", err)
+		log.Printf("Failed to add block #%d: %v", block.Header.Number, err)
+		log.Printf("Block parent hash: %x", block.Header.ParentHash)
 		// Don't crash the node, just return error
 		return &RPCResponse{
 			JSONRPC: "2.0",

@@ -373,6 +373,8 @@ func (rpc *RPCBlockchain) CreateNewBlock(miner core.Address, txs []core.Transact
 		return nil
 	}
 
+	log.Printf("Parent Hash from template: %s", templateData["parentHash"])
+
 	// Parse parent hash from template
 	var parentHash core.Hash
 	if parentHashData, ok := templateData["parentHash"]; ok {
