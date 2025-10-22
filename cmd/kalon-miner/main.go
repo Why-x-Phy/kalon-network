@@ -401,12 +401,18 @@ func (rpc *RPCBlockchain) CreateNewBlock(miner core.Address, txs []core.Transact
 		log.Printf("No parent hash in template: %v", templateData)
 	}
 
+	// Parse timestamp from template
+	templateTimestamp := time.Now()
+	if timestampData, ok := templateData["timestamp"].(float64); ok {
+		templateTimestamp = time.Unix(int64(timestampData), 0)
+	}
+
 	// Convert to core.Block
 	block := &core.Block{
 		Header: core.BlockHeader{
 			ParentHash: parentHash,
 			Number:     uint64(templateData["number"].(float64)),
-			Timestamp:  time.Now(),
+			Timestamp:  templateTimestamp.Add(time.Second), // Ensure timestamp is after parent
 			Difficulty: uint64(templateData["difficulty"].(float64)),
 			Miner:      miner,
 			Nonce:      0,
@@ -423,18 +429,18 @@ func (rpc *RPCBlockchain) CreateNewBlock(miner core.Address, txs []core.Transact
 // AddBlock submits a mined block to the node
 func (rpc *RPCBlockchain) AddBlock(block *core.Block) error {
 	log.Printf("Submitting block with parent hash: %x", block.Header.ParentHash)
-	
+
 	req := RPCRequest{
 		JSONRPC: "2.0",
 		Method:  "submitBlock",
 		Params: map[string]interface{}{
 			"block": map[string]interface{}{
-				"number":      float64(block.Header.Number),
-				"difficulty":  float64(block.Header.Difficulty),
-				"nonce":       float64(block.Header.Nonce),
-				"hash":        block.Hash.String(),
-				"parentHash":  hex.EncodeToString(block.Header.ParentHash[:]),
-				"timestamp":   float64(block.Header.Timestamp.Unix()),
+				"number":     float64(block.Header.Number),
+				"difficulty": float64(block.Header.Difficulty),
+				"nonce":      float64(block.Header.Nonce),
+				"hash":       block.Hash.String(),
+				"parentHash": hex.EncodeToString(block.Header.ParentHash[:]),
+				"timestamp":  float64(block.Header.Timestamp.Unix()),
 			},
 		},
 		ID: 3,
