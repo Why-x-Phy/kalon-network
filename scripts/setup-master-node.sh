@@ -13,10 +13,11 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-MASTER_IP=${1:-"185.133.249.107"}
-NETWORK=${2:-"community-testnet"}
-WALLET=${3:-"kalon12slz9pccxhahtm0th9v7n5emm6vtkumx4pykuh"}
-THREADS=${4:-4}
+KALON_VERSION="1.0.2"
+INSTALL_DIR="/opt/kalon"
+BIN_DIR="/usr/local/bin"
+SERVICE_USER="kalon"
+DATA_DIR="/var/lib/kalon"
 
 echo -e "${BLUE}================================${NC}"
 echo -e "${BLUE}  Kalon Master Node Setup${NC}"
@@ -26,117 +27,91 @@ echo ""
 # Check if running as root
 if [[ $EUID -ne 0 ]]; then
    echo -e "${RED}This script must be run as root${NC}"
-   echo "Usage: sudo $0 [master_ip] [network] [wallet] [threads]"
+   echo "Usage: sudo $0 <IP> <network> <wallet> <threads>"
    exit 1
 fi
 
-echo -e "${BLUE}Master Node Configuration:${NC}"
-echo "  IP Address: $MASTER_IP"
+# Check arguments
+if [ $# -ne 4 ]; then
+    echo -e "${RED}Usage: $0 <IP> <network> <wallet> <threads>${NC}"
+    echo "Example: $0 185.133.249.107 testnet kalon12slz9pccxhahtm0th9v7n5emm6vtkumx4pykuh 4"
+    exit 1
+fi
+
+MASTER_IP="$1"
+NETWORK="$2"
+WALLET="$3"
+THREADS="$4"
+
+echo -e "${YELLOW}Master Node Configuration:${NC}"
+echo "  IP: $MASTER_IP"
 echo "  Network: $NETWORK"
 echo "  Wallet: $WALLET"
 echo "  Threads: $THREADS"
 echo ""
 
-# Set data directory based on network
-DATA_DIR="/var/lib/kalon/$NETWORK"
-GENESIS_FILE="/opt/kalon/genesis/$NETWORK.json"
+# Validate network
+case $NETWORK in
+    "community-testnet")
+        GENESIS_FILE="$INSTALL_DIR/genesis/community-testnet.json"
+        DATA_SUBDIR="community-testnet"
+        RPC_PORT="16315"
+        P2P_PORT="17334"
+        ;;
+    "testnet")
+        GENESIS_FILE="$INSTALL_DIR/genesis/testnet.json"
+        DATA_SUBDIR="testnet"
+        RPC_PORT="16315"
+        P2P_PORT="17334"
+        ;;
+    "mainnet")
+        GENESIS_FILE="$INSTALL_DIR/genesis/mainnet.json"
+        DATA_SUBDIR="mainnet"
+        RPC_PORT="16315"
+        P2P_PORT="17334"
+        ;;
+    *)
+        echo -e "${RED}Invalid network: $NETWORK${NC}"
+        echo "Valid networks: community-testnet, testnet, mainnet"
+        exit 1
+        ;;
+esac
 
-# Create data directory if it doesn't exist
-mkdir -p "$DATA_DIR"
-chown kalon:kalon "$DATA_DIR"
-
-# Configure firewall for master node
-echo -e "${YELLOW}Configuring firewall for master node...${NC}"
-if command -v ufw &> /dev/null; then
-    # Allow RPC connections from anywhere
-    ufw allow 16315/tcp comment "Kalon RPC (Master)"
-    
-    # Allow P2P connections from anywhere
-    ufw allow 17334/tcp comment "Kalon P2P (Master)"
-    
-    # Allow explorer access
-    ufw allow 3000/tcp comment "Kalon Explorer (Master)"
-    
-    # Allow SSH (important!)
-    ufw allow ssh
-    
-    echo -e "${GREEN}Firewall configured for master node${NC}"
-else
-    echo -e "${YELLOW}UFW not found, please configure firewall manually${NC}"
+# Check if genesis file exists
+if [ ! -f "$GENESIS_FILE" ]; then
+    echo -e "${RED}Genesis file not found: $GENESIS_FILE${NC}"
+    exit 1
 fi
 
-# Create master node configuration
-echo -e "${YELLOW}Creating master node configuration...${NC}"
+# Create data directory
+echo -e "${YELLOW}Creating data directory...${NC}"
+mkdir -p "$DATA_DIR/$DATA_SUBDIR"
+chown -R "$SERVICE_USER:$SERVICE_USER" "$DATA_DIR/$DATA_SUBDIR"
 
-# Node configuration
-cat > /etc/kalon/master-node.conf << EOF
-# Kalon Master Node Configuration
-# Generated on $(date)
-
-[network]
-name = "$NETWORK"
-rpc_port = 16315
-p2p_port = 17334
-master_ip = "$MASTER_IP"
-
-[mining]
-wallet = "$WALLET"
-threads = $THREADS
-enabled = true
-
-[data]
-directory = "$DATA_DIR"
-genesis = "$GENESIS_FILE"
-
-[logging]
-level = "info"
-file = "/var/log/kalon/master-node.log"
-EOF
-
-# Create log directory
-mkdir -p /var/log/kalon
-chown kalon:kalon /var/log/kalon
-
-# Create systemd service for master node
+# Create master node service
 echo -e "${YELLOW}Creating master node service...${NC}"
-
 cat > /etc/systemd/system/kalon-master.service << EOF
 [Unit]
 Description=Kalon Network Master Node
 After=network.target
-Wants=network.target
 
 [Service]
 Type=simple
-User=kalon
-Group=kalon
-WorkingDirectory=/opt/kalon
-ExecStart=/usr/local/bin/kalon-node \\
-    --datadir $DATA_DIR \\
-    --genesis $GENESIS_FILE \\
-    --rpc :16315 \\
-    --p2p :17334 \\
-    --mining \\
-    --threads $THREADS \\
-    --log info
+User=$SERVICE_USER
+Group=$SERVICE_USER
+WorkingDirectory=$INSTALL_DIR
+ExecStart=$BIN_DIR/kalon-node --datadir $DATA_DIR/$DATA_SUBDIR --genesis $GENESIS_FILE --rpc :$RPC_PORT --p2p :$P2P_PORT
 Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=kalon-master
-
-# Security settings
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=$DATA_DIR /var/log/kalon
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# Create miner service for master node
+# Create master miner service
+echo -e "${YELLOW}Creating master miner service...${NC}"
 cat > /etc/systemd/system/kalon-master-miner.service << EOF
 [Unit]
 Description=Kalon Network Master Miner
@@ -145,32 +120,21 @@ Requires=kalon-master.service
 
 [Service]
 Type=simple
-User=kalon
-Group=kalon
-WorkingDirectory=/opt/kalon
-ExecStart=/usr/local/bin/kalon-miner \\
-    --wallet $WALLET \\
-    --threads $THREADS \\
-    --rpc http://localhost:16315 \\
-    --log info
+User=$SERVICE_USER
+Group=$SERVICE_USER
+WorkingDirectory=$INSTALL_DIR
+ExecStart=$BIN_DIR/kalon-miner --wallet $WALLET --threads $THREADS --rpc http://localhost:$RPC_PORT
 Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=kalon-master-miner
-
-# Security settings
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=$DATA_DIR /var/log/kalon
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# Create explorer service for master node
+# Create master explorer service
+echo -e "${YELLOW}Creating master explorer service...${NC}"
 cat > /etc/systemd/system/kalon-master-explorer.service << EOF
 [Unit]
 Description=Kalon Network Master Explorer
@@ -179,32 +143,21 @@ Requires=kalon-master.service
 
 [Service]
 Type=simple
-User=kalon
-Group=kalon
-WorkingDirectory=/opt/kalon/explorer
-ExecStart=/usr/bin/node api/main.js
+User=$SERVICE_USER
+Group=$SERVICE_USER
+WorkingDirectory=$INSTALL_DIR/explorer/api
+ExecStart=$INSTALL_DIR/explorer/api/main
 Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=kalon-master-explorer
-
-# Security settings
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/opt/kalon/explorer /var/log/kalon
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# Reload systemd
-systemctl daemon-reload
-
-# Create management scripts for master node
-echo -e "${YELLOW}Creating master node management scripts...${NC}"
+# Create management scripts
+echo -e "${YELLOW}Creating management scripts...${NC}"
 
 cat > /usr/local/bin/kalon-master-start << 'EOF'
 #!/bin/bash
@@ -214,8 +167,8 @@ sleep 5
 systemctl start kalon-master-miner
 systemctl start kalon-master-explorer
 echo "Kalon Master Node started!"
-echo "RPC: http://$(hostname -I | awk '{print $1}'):16315"
-echo "Explorer: http://$(hostname -I | awk '{print $1}'):3000"
+echo "Node: http://localhost:16315"
+echo "Explorer: http://localhost:3000"
 EOF
 
 cat > /usr/local/bin/kalon-master-stop << 'EOF'
@@ -251,148 +204,61 @@ else
 fi
 EOF
 
-# Make scripts executable
-chmod +x /usr/local/bin/kalon-master-*
-
-# Create monitoring script
 cat > /usr/local/bin/kalon-master-monitor << 'EOF'
 #!/bin/bash
-# Kalon Master Node Monitoring Script
-
+echo "Kalon Master Node Monitor (Press Ctrl+C to exit)"
+echo "================================================"
 while true; do
     clear
-    echo "=========================================="
-    echo "  Kalon Master Node Monitor"
-    echo "  $(date)"
-    echo "=========================================="
+    echo "Kalon Master Node Monitor - $(date)"
+    echo "====================================="
     echo ""
     
-    # Check services
-    echo "Service Status:"
-    systemctl is-active kalon-master >/dev/null && echo "  Node:     RUNNING" || echo "  Node:     STOPPED"
-    systemctl is-active kalon-master-miner >/dev/null && echo "  Miner:    RUNNING" || echo "  Miner:    STOPPED"
-    systemctl is-active kalon-master-explorer >/dev/null && echo "  Explorer: RUNNING" || echo "  Explorer: STOPPED"
+    # Node status
+    echo "Node Status:"
+    systemctl is-active kalon-master
     echo ""
     
-    # Check RPC
-    if curl -s http://localhost:16315 >/dev/null 2>&1; then
-        echo "RPC Status: ONLINE"
-    else
-        echo "RPC Status: OFFLINE"
-    fi
+    # Miner status
+    echo "Miner Status:"
+    systemctl is-active kalon-master-miner
     echo ""
     
-    # Check disk space
-    echo "Disk Usage:"
-    df -h /var/lib/kalon | tail -1
+    # Explorer status
+    echo "Explorer Status:"
+    systemctl is-active kalon-master-explorer
     echo ""
     
-    # Check memory usage
-    echo "Memory Usage:"
-    free -h | grep Mem
+    # Block height
+    echo "Block Height:"
+    curl -s -X POST http://localhost:16315 \
+      -H "Content-Type: application/json" \
+      -d '{"jsonrpc":"2.0","method":"getHeight","params":{},"id":1}' 2>/dev/null | grep -o '"result":[0-9]*' | cut -d: -f2 || echo "N/A"
     echo ""
     
-    # Check recent logs
-    echo "Recent Logs (last 5 lines):"
-    journalctl -u kalon-master --no-pager -n 5 | tail -5
-    echo ""
-    
-    echo "Press Ctrl+C to exit"
-    sleep 10
+    sleep 5
 done
 EOF
 
-chmod +x /usr/local/bin/kalon-master-monitor
+# Make scripts executable
+chmod +x /usr/local/bin/kalon-master-*
 
-# Create backup script
-cat > /usr/local/bin/kalon-master-backup << 'EOF'
-#!/bin/bash
-# Kalon Master Node Backup Script
+# Reload systemd
+systemctl daemon-reload
 
-BACKUP_DIR="/var/backups/kalon"
-DATE=$(date +%Y%m%d_%H%M%S)
-NETWORK=${1:-"community-testnet"}
+# Enable services
+systemctl enable kalon-master
+systemctl enable kalon-master-miner
+systemctl enable kalon-master-explorer
 
-echo "Creating backup for $NETWORK..."
-
-# Create backup directory
-mkdir -p "$BACKUP_DIR"
-
-# Stop services
-echo "Stopping services..."
-systemctl stop kalon-master-explorer
-systemctl stop kalon-master-miner
-systemctl stop kalon-master
-
-# Create backup
-echo "Creating backup..."
-tar -czf "$BACKUP_DIR/kalon_${NETWORK}_${DATE}.tar.gz" \
-    -C /var/lib/kalon "$NETWORK" \
-    -C /opt/kalon genesis scripts
-
-# Start services
-echo "Starting services..."
-systemctl start kalon-master
-sleep 5
-systemctl start kalon-master-miner
-systemctl start kalon-master-explorer
-
-echo "Backup created: $BACKUP_DIR/kalon_${NETWORK}_${DATE}.tar.gz"
-EOF
-
-chmod +x /usr/local/bin/kalon-master-backup
-
-# Create update script
-cat > /usr/local/bin/kalon-master-update << 'EOF'
-#!/bin/bash
-# Kalon Master Node Update Script
-
-echo "Updating Kalon Master Node..."
-
-# Stop services
-echo "Stopping services..."
-systemctl stop kalon-master-explorer
-systemctl stop kalon-master-miner
-systemctl stop kalon-master
-
-# Update from repository
-echo "Updating from repository..."
-cd /tmp
-rm -rf kalon-network
-git clone https://github.com/Why-x-Phy/kalon-network.git
-cd kalon-network
-
-# Build new binaries
-echo "Building new binaries..."
-export PATH=$PATH:/usr/local/go/bin
-make build
-
-# Install new binaries
-echo "Installing new binaries..."
-cp build/kalon-node /usr/local/bin/
-cp build/kalon-miner /usr/local/bin/
-cp build/kalon-wallet /usr/local/bin/
-
-# Update configuration files
-echo "Updating configuration files..."
-cp -r genesis /opt/kalon/
-cp -r scripts /opt/kalon/
-
-# Set permissions
-chown -R kalon:kalon /opt/kalon
-chmod +x /usr/local/bin/kalon-*
-
-# Start services
-echo "Starting services..."
-systemctl start kalon-master
-sleep 5
-systemctl start kalon-master-miner
-systemctl start kalon-master-explorer
-
-echo "Update complete!"
-EOF
-
-chmod +x /usr/local/bin/kalon-master-update
+# Create firewall rules
+echo -e "${YELLOW}Configuring firewall...${NC}"
+if command -v ufw &> /dev/null; then
+    ufw allow $RPC_PORT/tcp comment "Kalon RPC"
+    ufw allow $P2P_PORT/tcp comment "Kalon P2P"
+    ufw allow 3000/tcp comment "Kalon Explorer"
+    echo -e "${GREEN}Firewall rules added${NC}"
+fi
 
 # Final status
 echo ""
@@ -400,25 +266,26 @@ echo -e "${GREEN}================================${NC}"
 echo -e "${GREEN}  Master Node Setup Complete!${NC}"
 echo -e "${GREEN}================================${NC}"
 echo ""
-echo -e "${BLUE}Master Node Information:${NC}"
-echo "  IP Address: $MASTER_IP"
+echo -e "${BLUE}Master Node Configuration:${NC}"
+echo "  IP: $MASTER_IP"
 echo "  Network: $NETWORK"
 echo "  Wallet: $WALLET"
 echo "  Threads: $THREADS"
-echo ""
-echo -e "${BLUE}Access Points:${NC}"
-echo "  RPC API:    http://$MASTER_IP:16315"
-echo "  Explorer:   http://$MASTER_IP:3000"
-echo "  P2P Port:   17334"
+echo "  Data Directory: $DATA_DIR/$DATA_SUBDIR"
+echo "  RPC Port: $RPC_PORT"
+echo "  P2P Port: $P2P_PORT"
 echo ""
 echo -e "${YELLOW}Management Commands:${NC}"
-echo "  kalon-master-start    - Start master node"
-echo "  kalon-master-stop     - Stop master node"
-echo "  kalon-master-status   - Check status"
-echo "  kalon-master-logs     - View logs"
-echo "  kalon-master-monitor  - Monitor in real-time"
-echo "  kalon-master-backup   - Create backup"
-echo "  kalon-master-update   - Update from repository"
+echo "  kalon-master-start    - Start all services"
+echo "  kalon-master-stop     - Stop all services"
+echo "  kalon-master-status   - Check service status"
+echo "  kalon-master-logs     - View service logs"
+echo "  kalon-master-monitor  - Real-time monitoring"
+echo ""
+echo -e "${YELLOW}Access Points:${NC}"
+echo "  RPC API:    http://$MASTER_IP:$RPC_PORT"
+echo "  Explorer:   http://$MASTER_IP:3000"
+echo "  P2P Port:   $P2P_PORT"
 echo ""
 echo -e "${GREEN}To start the master node, run: kalon-master-start${NC}"
 echo ""

@@ -13,10 +13,11 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-MASTER_IP=${1:-"185.133.249.107"}
-NETWORK=${2:-"community-testnet"}
-WALLET=${3:-""}
-THREADS=${4:-2}
+KALON_VERSION="1.0.2"
+INSTALL_DIR="/opt/kalon"
+BIN_DIR="/usr/local/bin"
+SERVICE_USER="kalon"
+DATA_DIR="/var/lib/kalon"
 
 echo -e "${BLUE}================================${NC}"
 echo -e "${BLUE}  Kalon Slave Node Setup${NC}"
@@ -26,128 +27,91 @@ echo ""
 # Check if running as root
 if [[ $EUID -ne 0 ]]; then
    echo -e "${RED}This script must be run as root${NC}"
-   echo "Usage: sudo $0 [master_ip] [network] [wallet] [threads]"
+   echo "Usage: sudo $0 <master-ip> <network> <wallet> <threads>"
    exit 1
 fi
 
-# Generate wallet if not provided
-if [ -z "$WALLET" ]; then
-    echo -e "${YELLOW}Generating new wallet...${NC}"
-    WALLET=$(kalon-wallet create | grep "Address:" | awk '{print $2}')
-    if [ -z "$WALLET" ]; then
-        echo -e "${RED}Failed to generate wallet${NC}"
-        exit 1
-    fi
-    echo -e "${GREEN}Generated wallet: $WALLET${NC}"
+# Check arguments
+if [ $# -ne 4 ]; then
+    echo -e "${RED}Usage: $0 <master-ip> <network> <wallet> <threads>${NC}"
+    echo "Example: $0 185.133.249.107 testnet kalon12slz9pccxhahtm0th9v7n5emm6vtkumx4pykuh 2"
+    exit 1
 fi
 
-echo -e "${BLUE}Slave Node Configuration:${NC}"
+MASTER_IP="$1"
+NETWORK="$2"
+WALLET="$3"
+THREADS="$4"
+
+echo -e "${YELLOW}Slave Node Configuration:${NC}"
 echo "  Master IP: $MASTER_IP"
 echo "  Network: $NETWORK"
 echo "  Wallet: $WALLET"
 echo "  Threads: $THREADS"
 echo ""
 
-# Set data directory based on network
-DATA_DIR="/var/lib/kalon/$NETWORK"
-GENESIS_FILE="/opt/kalon/genesis/$NETWORK.json"
+# Validate network
+case $NETWORK in
+    "community-testnet")
+        GENESIS_FILE="$INSTALL_DIR/genesis/community-testnet.json"
+        DATA_SUBDIR="community-testnet"
+        RPC_PORT="16316"
+        P2P_PORT="17335"
+        ;;
+    "testnet")
+        GENESIS_FILE="$INSTALL_DIR/genesis/testnet.json"
+        DATA_SUBDIR="testnet"
+        RPC_PORT="16316"
+        P2P_PORT="17335"
+        ;;
+    "mainnet")
+        GENESIS_FILE="$INSTALL_DIR/genesis/mainnet.json"
+        DATA_SUBDIR="mainnet"
+        RPC_PORT="16316"
+        P2P_PORT="17335"
+        ;;
+    *)
+        echo -e "${RED}Invalid network: $NETWORK${NC}"
+        echo "Valid networks: community-testnet, testnet, mainnet"
+        exit 1
+        ;;
+esac
 
-# Create data directory if it doesn't exist
-mkdir -p "$DATA_DIR"
-chown kalon:kalon "$DATA_DIR"
-
-# Configure firewall for slave node
-echo -e "${YELLOW}Configuring firewall for slave node...${NC}"
-if command -v ufw &> /dev/null; then
-    # Allow RPC connections from master only
-    ufw allow from $MASTER_IP to any port 16315 comment "Kalon RPC (Master)"
-    
-    # Allow P2P connections from master only
-    ufw allow from $MASTER_IP to any port 17334 comment "Kalon P2P (Master)"
-    
-    # Allow local RPC access
-    ufw allow from 127.0.0.1 to any port 16315 comment "Kalon RPC (Local)"
-    
-    # Allow local P2P access
-    ufw allow from 127.0.0.1 to any port 17334 comment "Kalon P2P (Local)"
-    
-    # Allow SSH (important!)
-    ufw allow ssh
-    
-    echo -e "${GREEN}Firewall configured for slave node${NC}"
-else
-    echo -e "${YELLOW}UFW not found, please configure firewall manually${NC}"
+# Check if genesis file exists
+if [ ! -f "$GENESIS_FILE" ]; then
+    echo -e "${RED}Genesis file not found: $GENESIS_FILE${NC}"
+    exit 1
 fi
 
-# Create slave node configuration
-echo -e "${YELLOW}Creating slave node configuration...${NC}"
+# Create data directory
+echo -e "${YELLOW}Creating data directory...${NC}"
+mkdir -p "$DATA_DIR/$DATA_SUBDIR"
+chown -R "$SERVICE_USER:$SERVICE_USER" "$DATA_DIR/$DATA_SUBDIR"
 
-cat > /etc/kalon/slave-node.conf << EOF
-# Kalon Slave Node Configuration
-# Generated on $(date)
-
-[network]
-name = "$NETWORK"
-rpc_port = 16315
-p2p_port = 17334
-master_ip = "$MASTER_IP"
-
-[mining]
-wallet = "$WALLET"
-threads = $THREADS
-enabled = true
-
-[data]
-directory = "$DATA_DIR"
-genesis = "$GENESIS_FILE"
-
-[logging]
-level = "info"
-file = "/var/log/kalon/slave-node.log"
-EOF
-
-# Create log directory
-mkdir -p /var/log/kalon
-chown kalon:kalon /var/log/kalon
-
-# Create systemd service for slave node
+# Create slave node service
 echo -e "${YELLOW}Creating slave node service...${NC}"
-
 cat > /etc/systemd/system/kalon-slave.service << EOF
 [Unit]
 Description=Kalon Network Slave Node
 After=network.target
-Wants=network.target
 
 [Service]
 Type=simple
-User=kalon
-Group=kalon
-WorkingDirectory=/opt/kalon
-ExecStart=/usr/local/bin/kalon-node \\
-    --datadir $DATA_DIR \\
-    --genesis $GENESIS_FILE \\
-    --rpc :16315 \\
-    --p2p :17334 \\
-    --log info
+User=$SERVICE_USER
+Group=$SERVICE_USER
+WorkingDirectory=$INSTALL_DIR
+ExecStart=$BIN_DIR/kalon-node --datadir $DATA_DIR/$DATA_SUBDIR --genesis $GENESIS_FILE --rpc :$RPC_PORT --p2p :$P2P_PORT
 Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=kalon-slave
-
-# Security settings
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=$DATA_DIR /var/log/kalon
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# Create miner service for slave node
+# Create slave miner service
+echo -e "${YELLOW}Creating slave miner service...${NC}"
 cat > /etc/systemd/system/kalon-slave-miner.service << EOF
 [Unit]
 Description=Kalon Network Slave Miner
@@ -156,32 +120,21 @@ Requires=kalon-slave.service
 
 [Service]
 Type=simple
-User=kalon
-Group=kalon
-WorkingDirectory=/opt/kalon
-ExecStart=/usr/local/bin/kalon-miner \\
-    --wallet $WALLET \\
-    --threads $THREADS \\
-    --rpc http://localhost:16315 \\
-    --log info
+User=$SERVICE_USER
+Group=$SERVICE_USER
+WorkingDirectory=$INSTALL_DIR
+ExecStart=$BIN_DIR/kalon-miner --wallet $WALLET --threads $THREADS --rpc http://localhost:$RPC_PORT
 Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=kalon-slave-miner
-
-# Security settings
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=$DATA_DIR /var/log/kalon
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# Create sync service for slave node
+# Create sync service
+echo -e "${YELLOW}Creating sync service...${NC}"
 cat > /etc/systemd/system/kalon-slave-sync.service << EOF
 [Unit]
 Description=Kalon Network Slave Sync
@@ -190,87 +143,21 @@ Requires=kalon-slave.service
 
 [Service]
 Type=simple
-User=kalon
-Group=kalon
-WorkingDirectory=/opt/kalon
-ExecStart=/usr/local/bin/kalon-sync \\
-    --master $MASTER_IP:16315 \\
-    --local localhost:16315 \\
-    --interval 30s
+User=$SERVICE_USER
+Group=$SERVICE_USER
+WorkingDirectory=$INSTALL_DIR
+ExecStart=/bin/bash -c 'while true; do curl -s -X POST http://$MASTER_IP:16315 -H "Content-Type: application/json" -d "{\"jsonrpc\":\"2.0\",\"method\":\"getHeight\",\"params\":{},\"id\":1}" > /dev/null; sleep 30; done'
 Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=kalon-slave-sync
-
-# Security settings
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=$DATA_DIR /var/log/kalon
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-# Create sync script
-cat > /usr/local/bin/kalon-sync << 'EOF'
-#!/bin/bash
-# Kalon Network Sync Script
-
-MASTER_IP=${1:-"185.133.249.107"}
-MASTER_PORT=${2:-16315}
-LOCAL_IP=${3:-"localhost"}
-LOCAL_PORT=${4:-16315}
-SYNC_INTERVAL=${5:-30}
-
-MASTER_URL="http://$MASTER_IP:$MASTER_PORT"
-LOCAL_URL="http://$LOCAL_IP:$LOCAL_PORT"
-
-echo "Starting Kalon Sync..."
-echo "Master: $MASTER_URL"
-echo "Local: $LOCAL_URL"
-echo "Interval: ${SYNC_INTERVAL}s"
-echo ""
-
-while true; do
-    # Get master block height
-    MASTER_HEIGHT=$(curl -s "$MASTER_URL" -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"getHeight","params":{},"id":1}' | jq -r '.result // 0' 2>/dev/null || echo "0")
-    
-    # Get local block height
-    LOCAL_HEIGHT=$(curl -s "$LOCAL_URL" -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"getHeight","params":{},"id":1}' | jq -r '.result // 0' 2>/dev/null || echo "0")
-    
-    if [ "$MASTER_HEIGHT" -gt "$LOCAL_HEIGHT" ]; then
-        echo "$(date): Syncing... Master: $MASTER_HEIGHT, Local: $LOCAL_HEIGHT"
-        
-        # Get blocks from master
-        for ((i=$LOCAL_HEIGHT+1; i<=$MASTER_HEIGHT; i++)); do
-            BLOCK=$(curl -s "$MASTER_URL" -H "Content-Type: application/json" -d "{\"jsonrpc\":\"2.0\",\"method\":\"getBlockByNumber\",\"params\":{\"number\":$i},\"id\":1}" | jq -r '.result' 2>/dev/null)
-            
-            if [ "$BLOCK" != "null" ] && [ "$BLOCK" != "" ]; then
-                # Submit block to local node
-                curl -s "$LOCAL_URL" -H "Content-Type: application/json" -d "{\"jsonrpc\":\"2.0\",\"method\":\"submitBlock\",\"params\":{\"block\":$BLOCK},\"id\":1}" >/dev/null
-                echo "  Synced block $i"
-            fi
-        done
-        
-        echo "  Sync complete! Local height: $LOCAL_HEIGHT -> $MASTER_HEIGHT"
-    else
-        echo "$(date): In sync. Master: $MASTER_HEIGHT, Local: $LOCAL_HEIGHT"
-    fi
-    
-    sleep $SYNC_INTERVAL
-done
-EOF
-
-chmod +x /usr/local/bin/kalon-sync
-
-# Reload systemd
-systemctl daemon-reload
-
-# Create management scripts for slave node
-echo -e "${YELLOW}Creating slave node management scripts...${NC}"
+# Create management scripts
+echo -e "${YELLOW}Creating management scripts...${NC}"
 
 cat > /usr/local/bin/kalon-slave-start << 'EOF'
 #!/bin/bash
@@ -280,8 +167,7 @@ sleep 5
 systemctl start kalon-slave-miner
 systemctl start kalon-slave-sync
 echo "Kalon Slave Node started!"
-echo "RPC: http://localhost:16315"
-echo "Syncing with master node..."
+echo "Node: http://localhost:16316"
 EOF
 
 cat > /usr/local/bin/kalon-slave-stop << 'EOF'
@@ -317,83 +203,60 @@ else
 fi
 EOF
 
-# Make scripts executable
-chmod +x /usr/local/bin/kalon-slave-*
-
-# Create monitoring script
 cat > /usr/local/bin/kalon-slave-monitor << 'EOF'
 #!/bin/bash
-# Kalon Slave Node Monitoring Script
-
-MASTER_IP=${1:-"185.133.249.107"}
-MASTER_URL="http://$MASTER_IP:16315"
-LOCAL_URL="http://localhost:16315"
-
+echo "Kalon Slave Node Monitor (Press Ctrl+C to exit)"
+echo "==============================================="
 while true; do
     clear
-    echo "=========================================="
-    echo "  Kalon Slave Node Monitor"
-    echo "  $(date)"
-    echo "=========================================="
+    echo "Kalon Slave Node Monitor - $(date)"
+    echo "==================================="
     echo ""
     
-    # Check services
-    echo "Service Status:"
-    systemctl is-active kalon-slave >/dev/null && echo "  Node:     RUNNING" || echo "  Node:     STOPPED"
-    systemctl is-active kalon-slave-miner >/dev/null && echo "  Miner:    RUNNING" || echo "  Miner:    STOPPED"
-    systemctl is-active kalon-slave-sync >/dev/null && echo "  Sync:     RUNNING" || echo "  Sync:     STOPPED"
+    # Node status
+    echo "Node Status:"
+    systemctl is-active kalon-slave
     echo ""
     
-    # Check RPC
-    if curl -s $LOCAL_URL >/dev/null 2>&1; then
-        echo "Local RPC:  ONLINE"
-    else
-        echo "Local RPC:  OFFLINE"
-    fi
-    
-    if curl -s $MASTER_URL >/dev/null 2>&1; then
-        echo "Master RPC: ONLINE"
-    else
-        echo "Master RPC: OFFLINE"
-    fi
+    # Miner status
+    echo "Miner Status:"
+    systemctl is-active kalon-slave-miner
     echo ""
     
-    # Check sync status
-    MASTER_HEIGHT=$(curl -s "$MASTER_URL" -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"getHeight","params":{},"id":1}' | jq -r '.result // 0' 2>/dev/null || echo "0")
-    LOCAL_HEIGHT=$(curl -s "$LOCAL_URL" -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"getHeight","params":{},"id":1}' | jq -r '.result // 0' 2>/dev/null || echo "0")
-    
+    # Sync status
     echo "Sync Status:"
-    echo "  Master Height: $MASTER_HEIGHT"
-    echo "  Local Height:  $LOCAL_HEIGHT"
-    
-    if [ "$MASTER_HEIGHT" -eq "$LOCAL_HEIGHT" ]; then
-        echo "  Status:        IN SYNC"
-    else
-        echo "  Status:        SYNCING"
-    fi
+    systemctl is-active kalon-slave-sync
     echo ""
     
-    # Check disk space
-    echo "Disk Usage:"
-    df -h /var/lib/kalon | tail -1
+    # Block height
+    echo "Block Height:"
+    curl -s -X POST http://localhost:16316 \
+      -H "Content-Type: application/json" \
+      -d '{"jsonrpc":"2.0","method":"getHeight","params":{},"id":1}' 2>/dev/null | grep -o '"result":[0-9]*' | cut -d: -f2 || echo "N/A"
     echo ""
     
-    # Check memory usage
-    echo "Memory Usage:"
-    free -h | grep Mem
-    echo ""
-    
-    # Check recent logs
-    echo "Recent Logs (last 5 lines):"
-    journalctl -u kalon-slave --no-pager -n 5 | tail -5
-    echo ""
-    
-    echo "Press Ctrl+C to exit"
-    sleep 10
+    sleep 5
 done
 EOF
 
-chmod +x /usr/local/bin/kalon-slave-monitor
+# Make scripts executable
+chmod +x /usr/local/bin/kalon-slave-*
+
+# Reload systemd
+systemctl daemon-reload
+
+# Enable services
+systemctl enable kalon-slave
+systemctl enable kalon-slave-miner
+systemctl enable kalon-slave-sync
+
+# Create firewall rules
+echo -e "${YELLOW}Configuring firewall...${NC}"
+if command -v ufw &> /dev/null; then
+    ufw allow $RPC_PORT/tcp comment "Kalon RPC"
+    ufw allow $P2P_PORT/tcp comment "Kalon P2P"
+    echo -e "${GREEN}Firewall rules added${NC}"
+fi
 
 # Final status
 echo ""
@@ -401,22 +264,25 @@ echo -e "${GREEN}================================${NC}"
 echo -e "${GREEN}  Slave Node Setup Complete!${NC}"
 echo -e "${GREEN}================================${NC}"
 echo ""
-echo -e "${BLUE}Slave Node Information:${NC}"
+echo -e "${BLUE}Slave Node Configuration:${NC}"
 echo "  Master IP: $MASTER_IP"
 echo "  Network: $NETWORK"
 echo "  Wallet: $WALLET"
 echo "  Threads: $THREADS"
-echo ""
-echo -e "${BLUE}Access Points:${NC}"
-echo "  Local RPC:  http://localhost:16315"
-echo "  P2P Port:   17334"
+echo "  Data Directory: $DATA_DIR/$DATA_SUBDIR"
+echo "  RPC Port: $RPC_PORT"
+echo "  P2P Port: $P2P_PORT"
 echo ""
 echo -e "${YELLOW}Management Commands:${NC}"
-echo "  kalon-slave-start    - Start slave node"
-echo "  kalon-slave-stop     - Stop slave node"
-echo "  kalon-slave-status   - Check status"
-echo "  kalon-slave-logs     - View logs"
-echo "  kalon-slave-monitor  - Monitor in real-time"
+echo "  kalon-slave-start    - Start all services"
+echo "  kalon-slave-stop     - Stop all services"
+echo "  kalon-slave-status   - Check service status"
+echo "  kalon-slave-logs     - View service logs"
+echo "  kalon-slave-monitor  - Real-time monitoring"
+echo ""
+echo -e "${YELLOW}Access Points:${NC}"
+echo "  RPC API:    http://localhost:$RPC_PORT"
+echo "  P2P Port:   $P2P_PORT"
 echo ""
 echo -e "${GREEN}To start the slave node, run: kalon-slave-start${NC}"
 echo ""
