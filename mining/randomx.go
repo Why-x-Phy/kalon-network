@@ -226,36 +226,36 @@ func (rm *RandomXMiner) calculateHash(header core.BlockHeader) [32]byte {
 func (rm *RandomXMiner) createHeaderData(header core.BlockHeader) []byte {
 	data := make([]byte, 0, 200)
 	data = append(data, header.ParentHash[:]...)
-	
+
 	// Use compatible binary encoding for older Go versions
 	numberBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(numberBytes, header.Number)
 	data = append(data, numberBytes...)
-	
+
 	timestampBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(timestampBytes, uint64(header.Timestamp.Unix()))
 	data = append(data, timestampBytes...)
-	
+
 	difficultyBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(difficultyBytes, header.Difficulty)
 	data = append(data, difficultyBytes...)
-	
+
 	data = append(data, header.Miner[:]...)
-	
+
 	nonceBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(nonceBytes, header.Nonce)
 	data = append(data, nonceBytes...)
-	
+
 	data = append(data, header.MerkleRoot[:]...)
-	
+
 	txCountBytes := make([]byte, 4)
 	binary.BigEndian.PutUint32(txCountBytes, header.TxCount)
 	data = append(data, txCountBytes...)
-	
+
 	networkFeeBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(networkFeeBytes, header.NetworkFee)
 	data = append(data, networkFeeBytes...)
-	
+
 	treasuryFeeBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(treasuryFeeBytes, header.TreasuryFee)
 	data = append(data, treasuryFeeBytes...)
@@ -275,13 +275,13 @@ func (rm *RandomXMiner) randomXHash(data []byte) [32]byte {
 	for round := 0; round < 16; round++ {
 		// Memory access pattern (simulates RandomX's memory hardness)
 		hash = rm.memoryHardRound(hash, round)
-		
+
 		// Cryptographic mixing
 		hash = rm.cryptographicMix(hash, data, round)
-		
+
 		// Bit manipulation
 		hash = rm.bitManipulation(hash, round)
-		
+
 		// Final SHA256
 		hash = sha256.Sum256(hash[:])
 	}
@@ -296,12 +296,12 @@ func (rm *RandomXMiner) memoryHardRound(hash [32]byte, round int) [32]byte {
 		// XOR with round-dependent values
 		offset := (round*8 + i) % 32
 		hash[offset] ^= byte(round + i)
-		
+
 		// Simulate cache line access
 		cacheIndex := (int(hash[offset]) + round) % 256
 		hash[offset] ^= byte(cacheIndex)
 	}
-	
+
 	return hash
 }
 
@@ -315,16 +315,16 @@ func (rm *RandomXMiner) cryptographicMix(hash [32]byte, data []byte, round int) 
 			hash[i] ^= data[dataOffset]
 		}
 	}
-	
+
 	// Apply round-dependent transformations
 	for i := 0; i < 32; i += 4 {
 		// 32-bit word operations
-		word := binary.BigEndian.Uint32(hash[i:i+4])
+		word := binary.BigEndian.Uint32(hash[i : i+4])
 		word ^= uint32(round) << (i % 8)
 		word = word<<1 | word>>31 // Rotate left
 		binary.BigEndian.PutUint32(hash[i:i+4], word)
 	}
-	
+
 	return hash
 }
 
@@ -333,14 +333,14 @@ func (rm *RandomXMiner) bitManipulation(hash [32]byte, round int) [32]byte {
 	// Bit rotation based on round
 	rotateAmount := (round % 7) + 1
 	hash = rm.rotateHash(hash, rotateAmount)
-	
+
 	// Bit flipping pattern
 	for i := 0; i < 32; i++ {
 		if (i+round)%3 == 0 {
 			hash[i] ^= 0xFF
 		}
 	}
-	
+
 	return hash
 }
 

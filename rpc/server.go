@@ -771,7 +771,7 @@ func (h *RPCHandler) handleSubmitBlock(req *RPCRequest) *RPCResponse {
 	}
 
 	log.Printf("Received block with parent hash: %x", parentHash)
-	
+
 	// Parse timestamp from block data
 	var blockTimestamp time.Time
 	if timestampData, ok := blockData["timestamp"].(float64); ok {

@@ -195,7 +195,7 @@ func (api *ExplorerAPI) handleHealth(w http.ResponseWriter, r *http.Request) {
 		Data: map[string]interface{}{
 			"status":    "healthy",
 			"timestamp": time.Now(),
-			"version":   "1.0.0",
+			"version":   "1.0.2",
 		},
 	}
 	api.writeJSON(w, http.StatusOK, response)
@@ -539,14 +539,14 @@ func (api *ExplorerAPI) handleGetPeers(w http.ResponseWriter, r *http.Request) {
 		{
 			"id":      "peer1",
 			"address": "192.168.1.100:17333",
-			"version": "1.0.0",
+			"version": "1.0.2",
 			"height":  1,
 			"latency": 50,
 		},
 		{
 			"id":      "peer2",
 			"address": "192.168.1.101:17333",
-			"version": "1.0.0",
+			"version": "1.0.2",
 			"height":  1,
 			"latency": 75,
 		},

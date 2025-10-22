@@ -41,7 +41,7 @@ type Node struct {
 }
 
 var (
-	version = "1.0.1"
+	version = "1.0.2"
 )
 
 func main() {
@@ -138,7 +138,7 @@ func (n *Node) Initialize() error {
 
 	// Create RPC blockchain adapter
 	rpcBlockchain := &RPCBlockchainAdapter{blockchain: n.blockchain}
-	
+
 	// Initialize RPC server
 	n.rpcServer = rpc.NewServer(n.config.RPCAddr, rpcBlockchain, nil, nil)
 

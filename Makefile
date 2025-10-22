@@ -4,7 +4,7 @@
 .PHONY: all build clean test install run help
 
 # Variables
-VERSION := 1.0.1
+VERSION := 1.0.2
 BUILD_DIR := build
 DIST_DIR := dist
 BINARIES := kalon-node kalon-wallet kalon-miner

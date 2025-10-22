@@ -107,36 +107,36 @@ func createBlockMessage(block *core.Block) []byte {
 	// Create message from block header fields
 	data := make([]byte, 0, 200)
 	data = append(data, block.Header.ParentHash.Bytes()...)
-	
+
 	// Use compatible binary encoding for older Go versions
 	numberBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(numberBytes, block.Header.Number)
 	data = append(data, numberBytes...)
-	
+
 	timestampBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(timestampBytes, uint64(block.Header.Timestamp.Unix()))
 	data = append(data, timestampBytes...)
-	
+
 	difficultyBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(difficultyBytes, block.Header.Difficulty)
 	data = append(data, difficultyBytes...)
-	
+
 	data = append(data, block.Header.Miner.Bytes()...)
-	
+
 	nonceBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(nonceBytes, block.Header.Nonce)
 	data = append(data, nonceBytes...)
-	
+
 	data = append(data, block.Header.MerkleRoot.Bytes()...)
-	
+
 	txCountBytes := make([]byte, 4)
 	binary.BigEndian.PutUint32(txCountBytes, block.Header.TxCount)
 	data = append(data, txCountBytes...)
-	
+
 	networkFeeBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(networkFeeBytes, block.Header.NetworkFee)
 	data = append(data, networkFeeBytes...)
-	
+
 	treasuryFeeBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(treasuryFeeBytes, block.Header.TreasuryFee)
 	data = append(data, treasuryFeeBytes...)

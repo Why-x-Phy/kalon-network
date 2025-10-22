@@ -15,6 +15,8 @@ import (
 	"golang.org/x/term"
 )
 
+var version = "1.0.2"
+
 // WalletManager handles wallet operations
 type WalletManager struct {
 	wallet *crypto.Wallet
@@ -400,7 +402,7 @@ func sendTransaction(rpcURL string, txReq *TransactionRequest) (*TransactionResp
 
 // usage displays usage information
 func usage() {
-	fmt.Println("Kalon Wallet CLI")
+	fmt.Printf("Kalon Wallet CLI v%s\n", version)
 	fmt.Println()
 	fmt.Println("Usage:")
 	fmt.Println("  kalon-wallet <command> [flags]")

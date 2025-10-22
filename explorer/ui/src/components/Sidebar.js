@@ -170,7 +170,7 @@ function Sidebar() {
       
       <Footer>
         <FooterText>
-          Kalon Network v1.0.0
+          Kalon Network v1.0.2
         </FooterText>
       </Footer>
     </SidebarContainer>

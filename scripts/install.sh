@@ -4,7 +4,7 @@ set -euo pipefail
 # Kalon Network Installation Script
 # Supports Ubuntu/Debian and Raspberry Pi (ARM64)
 
-VERSION="1.0.0"
+VERSION="1.0.2"
 ARCH=""
 OS=""
 INSTALL_DIR="/usr/local/bin"

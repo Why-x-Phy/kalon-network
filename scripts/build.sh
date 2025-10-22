@@ -4,7 +4,7 @@ set -euo pipefail
 # Kalon Network Build Script
 # Builds all Kalon binaries for different platforms
 
-VERSION="1.0.0"
+VERSION="1.0.2"
 BUILD_DIR="build"
 DIST_DIR="dist"
 
