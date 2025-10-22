@@ -39,8 +39,6 @@ func NewBlockchain(genesis *GenesisConfig, storage Storage) *Blockchain {
 
 	// Create genesis block
 	genesisBlock := bc.createGenesisBlock()
-	// Calculate hash for genesis block (after all fields are set)
-	genesisBlock.Hash = genesisBlock.CalculateHash()
 	bc.addBlock(genesisBlock)
 
 	// Debug: Log genesis block hash

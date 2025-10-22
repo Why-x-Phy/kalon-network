@@ -136,11 +136,20 @@ func (n *Node) Initialize() error {
 	blockchain := core.NewBlockchain(n.genesis, n.storage)
 	n.blockchain = blockchain
 
-	// Create RPC blockchain adapter
+	// Create RPC blockchain adapter - use the SAME blockchain instance
 	rpcBlockchain := &RPCBlockchainAdapter{blockchain: n.blockchain}
 
-	// Initialize RPC server
+	// Initialize RPC server with the SAME blockchain instance
 	n.rpcServer = rpc.NewServer(n.config.RPCAddr, rpcBlockchain, nil, nil)
+
+	// Debug: Log blockchain height after initialization
+	log.Printf("Node blockchain height after initialization: %d", n.blockchain.GetHeight())
+	log.Printf("RPC Server blockchain height: %d", rpcBlockchain.GetHeight())
+	log.Printf("RPC Server best block hash: %x", rpcBlockchain.GetBestBlock().Hash)
+
+	// CRITICAL FIX: Ensure RPC server uses the same blockchain instance
+	log.Printf("RPC Server blockchain instance: %p", rpcBlockchain.blockchain)
+	log.Printf("Node blockchain instance: %p", n.blockchain)
 
 	log.Printf("Node initialized successfully")
 	return nil

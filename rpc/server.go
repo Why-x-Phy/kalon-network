@@ -117,6 +117,9 @@ type RPCHandler struct {
 
 // NewServer creates a new RPC server
 func NewServer(addr string, blockchain Blockchain, p2p P2P, miner Miner) *Server {
+	// Debug: Log blockchain height at creation
+	log.Printf("RPC Server created with blockchain height: %d", blockchain.GetHeight())
+
 	handler := &RPCHandler{
 		blockchain: blockchain,
 		p2p:        p2p,
@@ -142,15 +145,30 @@ func (s *Server) Start() error {
 	// Create server with timeouts and limits
 	server := &http.Server{
 		Addr:           s.addr,
-		Handler:        mux,
-		ReadTimeout:    30 * time.Second,
-		WriteTimeout:   30 * time.Second,
-		IdleTimeout:    60 * time.Second,
-		MaxHeaderBytes: 1 << 20, // 1MB
+		Handler:        s.limitConnections(mux),
+		ReadTimeout:    10 * time.Second, // Shorter timeouts
+		WriteTimeout:   10 * time.Second, // Shorter timeouts
+		IdleTimeout:    30 * time.Second, // Shorter timeouts
+		MaxHeaderBytes: 1 << 20,          // 1MB
 	}
 
 	log.Printf("RPC server starting on %s", s.addr)
 	return server.ListenAndServe()
+}
+
+// limitConnections limits the number of concurrent connections
+func (s *Server) limitConnections(h http.Handler) http.Handler {
+	semaphore := make(chan struct{}, 2) // Max 2 concurrent connections (ULTRA RADICAL FIX)
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case semaphore <- struct{}{}:
+			defer func() { <-semaphore }()
+			h.ServeHTTP(w, r)
+		default:
+			http.Error(w, "Too many connections", http.StatusServiceUnavailable)
+		}
+	})
 }
 
 // handleRequest handles RPC requests
@@ -692,22 +710,26 @@ func (h *RPCHandler) handleCreateBlockTemplate(req *RPCRequest) *RPCResponse {
 	hash := sha256.Sum256([]byte(minerStr))
 	copy(miner[:], hash[:20])
 
-	// Create block template
-	block := h.blockchain.CreateNewBlock(miner, []core.Transaction{})
-	if block == nil {
-		return &RPCResponse{
-			JSONRPC: "2.0",
-			Error: &RPCError{
-				Code:    -32603,
-				Message: "Internal error",
-				Data:    "Failed to create block template",
-			},
-			ID: req.ID,
-		}
+	// Debug: Log current blockchain state
+	bestBlock := h.blockchain.GetBestBlock()
+	log.Printf("RPC Server - Current blockchain height: %d", h.blockchain.GetHeight())
+	log.Printf("RPC Server - Best block hash: %x", bestBlock.Hash)
+	log.Printf("RPC Server - Best block number: %d", bestBlock.Header.Number)
+
+	// CRITICAL FIX: Create block template with CORRECT parent hash
+	block := &core.Block{
+		Header: core.BlockHeader{
+			ParentHash: bestBlock.Hash, // Use the ACTUAL best block hash
+			Number:     bestBlock.Header.Number + 1,
+			Timestamp:  time.Now(),
+			Difficulty: 4, // Testnet difficulty
+			Miner:      miner,
+			Nonce:      0,
+		},
 	}
 
 	log.Printf("Created block template #%d with parent hash: %x", block.Header.Number, block.Header.ParentHash)
-	log.Printf("Best block hash: %x", h.blockchain.GetBestBlock().Hash)
+	log.Printf("Template parent hash should be: %x", bestBlock.Hash)
 
 	return &RPCResponse{
 		JSONRPC: "2.0",
