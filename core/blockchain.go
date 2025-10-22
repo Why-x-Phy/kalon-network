@@ -51,7 +51,7 @@ func (bc *Blockchain) createGenesisBlock() *Block {
 			ParentHash:  Hash{},
 			Number:      0,
 			Timestamp:   time.Now(),
-			Difficulty:  bc.genesis.Difficulty.Window,
+			Difficulty:  bc.genesis.Difficulty.InitialDifficulty,
 			Miner:       Address{},
 			Nonce:       0,
 			MerkleRoot:  Hash{},

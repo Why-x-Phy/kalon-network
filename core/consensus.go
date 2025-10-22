@@ -139,7 +139,7 @@ func (cm *ConsensusManager) CalculateDifficulty(height uint64, parent *Block) ui
 	if cm.genesis.Difficulty.LaunchGuard.Enabled {
 		launchGuardBlocks := cm.genesis.Difficulty.LaunchGuard.DurationHours * 3600 / cm.genesis.BlockTimeTarget
 		if height < launchGuardBlocks {
-			return uint64(float64(cm.genesis.Difficulty.Window) * cm.genesis.Difficulty.LaunchGuard.DifficultyFloorMultiplier)
+			return uint64(float64(cm.genesis.Difficulty.InitialDifficulty) * cm.genesis.Difficulty.LaunchGuard.DifficultyFloorMultiplier)
 		}
 	}
 
