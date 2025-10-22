@@ -744,21 +744,37 @@ func (h *RPCHandler) handleSubmitBlock(req *RPCRequest) *RPCResponse {
 		log.Printf("Invalid number in block data: %v", blockData["number"])
 		number = 0
 	}
-
+	
 	difficulty, ok := blockData["difficulty"].(float64)
 	if !ok {
 		log.Printf("Invalid difficulty in block data: %v", blockData["difficulty"])
 		difficulty = 1000
 	}
-
+	
 	nonce, ok := blockData["nonce"].(float64)
 	if !ok {
 		log.Printf("Invalid nonce in block data: %v", blockData["nonce"])
 		nonce = 0
 	}
 
+	// Parse parent hash
+	var parentHash core.Hash
+	if parentHashStr, ok := blockData["parentHash"].(string); ok {
+		hashBytes, err := hex.DecodeString(parentHashStr)
+		if err == nil && len(hashBytes) == 32 {
+			copy(parentHash[:], hashBytes)
+		} else {
+			log.Printf("Invalid parent hash format: %s, error: %v", parentHashStr, err)
+		}
+	} else {
+		log.Printf("No parent hash in block data: %v", blockData)
+	}
+
+	log.Printf("Received block with parent hash: %x", parentHash)
+
 	block := &core.Block{
 		Header: core.BlockHeader{
+			ParentHash: parentHash,
 			Number:     uint64(number),
 			Difficulty: uint64(difficulty),
 			Nonce:      uint64(nonce),

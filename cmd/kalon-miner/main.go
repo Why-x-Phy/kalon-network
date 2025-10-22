@@ -422,16 +422,19 @@ func (rpc *RPCBlockchain) CreateNewBlock(miner core.Address, txs []core.Transact
 
 // AddBlock submits a mined block to the node
 func (rpc *RPCBlockchain) AddBlock(block *core.Block) error {
+	log.Printf("Submitting block with parent hash: %x", block.Header.ParentHash)
+	
 	req := RPCRequest{
 		JSONRPC: "2.0",
 		Method:  "submitBlock",
 		Params: map[string]interface{}{
 			"block": map[string]interface{}{
-				"number":     float64(block.Header.Number),
-				"difficulty": float64(block.Header.Difficulty),
-				"nonce":      float64(block.Header.Nonce),
-				"hash":       block.Hash.String(),
-				"timestamp":  float64(block.Header.Timestamp.Unix()),
+				"number":      float64(block.Header.Number),
+				"difficulty":  float64(block.Header.Difficulty),
+				"nonce":       float64(block.Header.Nonce),
+				"hash":        block.Hash.String(),
+				"parentHash":  hex.EncodeToString(block.Header.ParentHash[:]),
+				"timestamp":   float64(block.Header.Timestamp.Unix()),
 			},
 		},
 		ID: 3,
