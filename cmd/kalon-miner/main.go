@@ -401,18 +401,16 @@ func (rpc *RPCBlockchain) CreateNewBlock(miner core.Address, txs []core.Transact
 		log.Printf("No parent hash in template: %v", templateData)
 	}
 
-	// Parse timestamp from template
-	templateTimestamp := time.Now()
-	if timestampData, ok := templateData["timestamp"].(float64); ok {
-		templateTimestamp = time.Unix(int64(timestampData), 0)
-	}
+	// Use current time instead of template timestamp to avoid race conditions
+	// when miner and node run on the same server
+	currentTime := time.Now()
 
 	// Convert to core.Block
 	block := &core.Block{
 		Header: core.BlockHeader{
 			ParentHash: parentHash,
 			Number:     uint64(templateData["number"].(float64)),
-			Timestamp:  templateTimestamp.Add(time.Second), // Ensure timestamp is after parent
+			Timestamp:  currentTime, // Use current time to ensure it's always after parent
 			Difficulty: uint64(templateData["difficulty"].(float64)),
 			Miner:      miner,
 			Nonce:      0,
@@ -422,7 +420,7 @@ func (rpc *RPCBlockchain) CreateNewBlock(miner core.Address, txs []core.Transact
 	}
 
 	log.Printf("Created block with parent hash: %x", block.Header.ParentHash)
-	log.Printf("Block timestamp: %d (template: %d)", block.Header.Timestamp.Unix(), templateTimestamp.Unix())
+	log.Printf("Block timestamp: %d (current time)", block.Header.Timestamp.Unix())
 
 	return block
 }
