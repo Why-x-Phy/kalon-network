@@ -176,8 +176,8 @@ Requires=kalon-node.service
 Type=simple
 User=$SERVICE_USER
 Group=$SERVICE_USER
-WorkingDirectory=$INSTALL_DIR/explorer
-ExecStart=/usr/bin/node api/main.js
+WorkingDirectory=$INSTALL_DIR/explorer/api
+ExecStart=$INSTALL_DIR/explorer/api/main
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -195,10 +195,18 @@ if ! command -v node &> /dev/null; then
 fi
 
 # Install explorer dependencies
-if [ -d "$INSTALL_DIR/explorer" ]; then
-    echo -e "${YELLOW}Installing explorer dependencies...${NC}"
-    cd "$INSTALL_DIR/explorer"
-    npm install
+if [ -d "$INSTALL_DIR/explorer/ui" ]; then
+    echo -e "${YELLOW}Installing explorer UI dependencies...${NC}"
+    cd "$INSTALL_DIR/explorer/ui"
+    sudo -u "$SERVICE_USER" npm install
+fi
+
+if [ -d "$INSTALL_DIR/explorer/api" ]; then
+    echo -e "${YELLOW}Building explorer API...${NC}"
+    cd "$INSTALL_DIR/explorer/api"
+    export PATH=$PATH:/usr/local/go/bin
+    go build -o main main.go
+    chown "$SERVICE_USER:$SERVICE_USER" main
 fi
 
 # Reload systemd
