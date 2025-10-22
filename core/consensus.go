@@ -2,7 +2,6 @@ package core
 
 import (
 	"crypto/sha256"
-	"encoding/binary"
 	"fmt"
 	"time"
 )
@@ -178,23 +177,39 @@ func (cm *ConsensusManager) CalculateDifficulty(height uint64, parent *Block) ui
 // CalculateTarget calculates the target hash for a given difficulty
 func (cm *ConsensusManager) CalculateTarget(difficulty uint64) []byte {
 	// Target = 2^256 / difficulty
-	// For simplicity, we'll use a 256-bit target
 	target := make([]byte, 32)
 
 	if difficulty == 0 {
-		// Maximum difficulty (all zeros)
+		// Maximum target (all 0xFF) - any hash is valid
+		for i := range target {
+			target[i] = 0xFF
+		}
 		return target
 	}
 
-	// Calculate target as 2^256 / difficulty
-	// This is a simplified calculation
-	targetValue := uint64(1<<32) / difficulty
-	if targetValue == 0 {
-		targetValue = 1
+	if difficulty == 1 {
+		// For difficulty 1, use maximum target (any hash is valid)
+		for i := range target {
+			target[i] = 0xFF
+		}
+		return target
 	}
 
-	// Set the target in the most significant bytes
-	binary.BigEndian.PutUint64(target[24:32], targetValue)
+	// For higher difficulties, calculate leading zero bytes needed
+	// Simple approach: difficulty N requires N leading zero bits
+	leadingZeroBits := difficulty - 1
+	leadingZeroBytes := leadingZeroBits / 8
+	remainingBits := leadingZeroBits % 8
+
+	// Fill non-zero bytes with 0xFF
+	for i := int(leadingZeroBytes); i < 32; i++ {
+		target[i] = 0xFF
+	}
+
+	// Set the partial byte if needed
+	if remainingBits > 0 && leadingZeroBytes < 32 {
+		target[leadingZeroBytes] = byte(0xFF >> remainingBits)
+	}
 
 	return target
 }
@@ -202,6 +217,19 @@ func (cm *ConsensusManager) CalculateTarget(difficulty uint64) []byte {
 // IsValidHash checks if a hash meets the target difficulty
 func (cm *ConsensusManager) IsValidHash(hash Hash, target []byte) bool {
 	hashBytes := hash.Bytes()
+
+	// Special case: if target is all 0xFF, any hash is valid (difficulty 0 or 1)
+	allFF := true
+	for i := 0; i < 32; i++ {
+		if target[i] != 0xFF {
+			allFF = false
+			break
+		}
+	}
+
+	if allFF {
+		return true
+	}
 
 	// Compare hash with target (lower is better)
 	for i := 0; i < 32; i++ {
