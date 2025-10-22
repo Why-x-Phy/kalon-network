@@ -20,7 +20,7 @@
 
 ### **1. Ubuntu Server Installation**
 
-#### **Master Node Setup:**
+#### **Master Node Setup (185.133.249.107):**
 ```bash
 # 1. Installation
 wget https://raw.githubusercontent.com/Why-x-Phy/kalon-network/master/scripts/install-ubuntu.sh
@@ -28,7 +28,14 @@ chmod +x install-ubuntu.sh
 sudo ./install-ubuntu.sh
 
 # 2. Master Node konfigurieren
+# Community Testnet (Standard)
 sudo ./scripts/setup-master-node.sh 185.133.249.107 community-testnet kalon12slz9pccxhahtm0th9v7n5emm6vtkumx4pykuh 4
+
+# Testnet
+sudo ./scripts/setup-master-node.sh 185.133.249.107 testnet kalon12slz9pccxhahtm0th9v7n5emm6vtkumx4pykuh 4
+
+# Mainnet
+sudo ./scripts/setup-master-node.sh 185.133.249.107 mainnet kalon12slz9pccxhahtm0th9v7n5emm6vtkumx4pykuh 4
 
 # 3. Master Node starten
 sudo kalon-master-start
