@@ -75,6 +75,7 @@ type HalvingEvent struct {
 type DifficultyConfig struct {
 	Algo                 string      `json:"algo"`
 	Window               uint64      `json:"window"`
+	InitialDifficulty    uint64      `json:"initialDifficulty"`
 	MaxAdjustPerBlockPct uint64      `json:"maxAdjustPerBlockPct"`
 	LaunchGuard          LaunchGuard `json:"launchGuard"`
 }

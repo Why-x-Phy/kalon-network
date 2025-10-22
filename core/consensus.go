@@ -132,7 +132,7 @@ func (cm *ConsensusManager) ValidateProofOfWork(block *Block) bool {
 // CalculateDifficulty calculates the difficulty for the next block using LWMA
 func (cm *ConsensusManager) CalculateDifficulty(height uint64, parent *Block) uint64 {
 	if height == 0 {
-		return cm.genesis.Difficulty.Window // Initial difficulty
+		return cm.genesis.Difficulty.InitialDifficulty // Initial difficulty
 	}
 
 	// Check if we're in launch guard period

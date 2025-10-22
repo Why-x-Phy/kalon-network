@@ -13,11 +13,12 @@
   "difficulty": {
     "algo": "LWMA",
     "window": 120,
+    "initialDifficulty": 1,
     "maxAdjustPerBlockPct": 25,
     "launchGuard": {
       "enabled": true,
       "durationHours": 48,
-      "difficultyFloorMultiplier": 8,
+      "difficultyFloorMultiplier": 0.1,
       "initialReward": 1.0
     }
   },
