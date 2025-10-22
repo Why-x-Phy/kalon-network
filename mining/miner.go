@@ -135,7 +135,7 @@ func (m *Miner) SetThreads(threads int) {
 func (m *Miner) miningLoop() {
 	for {
 		select {
-		case <-time.After(100 * time.Millisecond):
+		case <-time.After(1 * time.Second):
 			if !m.IsRunning() {
 				return
 			}
