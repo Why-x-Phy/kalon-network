@@ -422,6 +422,7 @@ func (rpc *RPCBlockchain) CreateNewBlock(miner core.Address, txs []core.Transact
 	}
 
 	log.Printf("Created block with parent hash: %x", block.Header.ParentHash)
+	log.Printf("Block timestamp: %d (template: %d)", block.Header.Timestamp.Unix(), templateTimestamp.Unix())
 
 	return block
 }
@@ -429,6 +430,7 @@ func (rpc *RPCBlockchain) CreateNewBlock(miner core.Address, txs []core.Transact
 // AddBlock submits a mined block to the node
 func (rpc *RPCBlockchain) AddBlock(block *core.Block) error {
 	log.Printf("Submitting block with parent hash: %x", block.Header.ParentHash)
+	log.Printf("Submitting block timestamp: %d", block.Header.Timestamp.Unix())
 
 	req := RPCRequest{
 		JSONRPC: "2.0",

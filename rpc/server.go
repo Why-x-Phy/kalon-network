@@ -744,13 +744,13 @@ func (h *RPCHandler) handleSubmitBlock(req *RPCRequest) *RPCResponse {
 		log.Printf("Invalid number in block data: %v", blockData["number"])
 		number = 0
 	}
-	
+
 	difficulty, ok := blockData["difficulty"].(float64)
 	if !ok {
 		log.Printf("Invalid difficulty in block data: %v", blockData["difficulty"])
 		difficulty = 1000
 	}
-	
+
 	nonce, ok := blockData["nonce"].(float64)
 	if !ok {
 		log.Printf("Invalid nonce in block data: %v", blockData["nonce"])
@@ -771,11 +771,22 @@ func (h *RPCHandler) handleSubmitBlock(req *RPCRequest) *RPCResponse {
 	}
 
 	log.Printf("Received block with parent hash: %x", parentHash)
+	
+	// Parse timestamp from block data
+	var blockTimestamp time.Time
+	if timestampData, ok := blockData["timestamp"].(float64); ok {
+		blockTimestamp = time.Unix(int64(timestampData), 0)
+		log.Printf("Received block timestamp: %d", blockTimestamp.Unix())
+	} else {
+		blockTimestamp = time.Now()
+		log.Printf("No timestamp in block data, using current time: %d", blockTimestamp.Unix())
+	}
 
 	block := &core.Block{
 		Header: core.BlockHeader{
 			ParentHash: parentHash,
 			Number:     uint64(number),
+			Timestamp:  blockTimestamp,
 			Difficulty: uint64(difficulty),
 			Nonce:      uint64(nonce),
 		},
