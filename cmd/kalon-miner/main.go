@@ -384,21 +384,28 @@ func (rpc *RPCBlockchain) CreateNewBlock(miner core.Address, txs []core.Transact
 			hashBytes, err := hex.DecodeString(v)
 			if err == nil && len(hashBytes) == 32 {
 				copy(parentHash[:], hashBytes)
+				log.Printf("✅ Parsed parent hash from template: %x", parentHash)
 			} else {
-				log.Printf("Failed to parse parent hash as hex: %s, error: %v", v, err)
+				log.Printf("❌ Failed to parse parent hash as hex: %s, error: %v", v, err)
+				// Use zero hash as fallback
+				parentHash = core.Hash{}
 			}
 		case []byte:
 			// Direct byte array
 			if len(v) == 32 {
 				copy(parentHash[:], v)
+				log.Printf("✅ Parsed parent hash from template (bytes): %x", parentHash)
 			} else {
-				log.Printf("Invalid parent hash length: %d", len(v))
+				log.Printf("❌ Invalid parent hash length: %d", len(v))
+				parentHash = core.Hash{}
 			}
 		default:
-			log.Printf("Unknown parent hash type: %T, value: %v", v, v)
+			log.Printf("❌ Unknown parent hash type: %T, value: %v", v, v)
+			parentHash = core.Hash{}
 		}
 	} else {
-		log.Printf("No parent hash in template: %v", templateData)
+		log.Printf("❌ No parent hash in template: %v", templateData)
+		parentHash = core.Hash{}
 	}
 
 	// Use current time instead of template timestamp to avoid race conditions

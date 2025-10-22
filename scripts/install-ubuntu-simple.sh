@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Kalon Network Installation Script for Ubuntu
-# Version: 1.0.2
+# Kalon Network Simple Installation Script for Ubuntu
+# Version: 1.0.2 - WITHOUT Explorer (No NPM needed)
 
 set -e
 
@@ -20,7 +20,8 @@ SERVICE_USER="kalon"
 DATA_DIR="/var/lib/kalon"
 
 echo -e "${BLUE}================================${NC}"
-echo -e "${BLUE}  Kalon Network v${KALON_VERSION} Installer${NC}"
+echo -e "${BLUE}  Kalon Network v${KALON_VERSION} Simple Installer${NC}"
+echo -e "${BLUE}  (Without Explorer - No NPM needed)${NC}"
 echo -e "${BLUE}================================${NC}"
 echo ""
 
@@ -35,7 +36,7 @@ fi
 echo -e "${YELLOW}Updating system packages...${NC}"
 apt update && apt upgrade -y
 
-# Install required dependencies
+# Install required dependencies (NO NODE.JS!)
 echo -e "${YELLOW}Installing dependencies...${NC}"
 apt install -y \
     wget \
@@ -113,7 +114,6 @@ cp build/kalon-wallet "$BIN_DIR/"
 echo -e "${YELLOW}Installing configuration files...${NC}"
 cp -r genesis "$INSTALL_DIR/"
 cp -r scripts "$INSTALL_DIR/"
-cp -r explorer "$INSTALL_DIR/"
 
 # Set permissions
 chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
@@ -165,51 +165,6 @@ StandardError=journal
 WantedBy=multi-user.target
 EOF
 
-# Explorer service
-cat > /etc/systemd/system/kalon-explorer.service << EOF
-[Unit]
-Description=Kalon Network Explorer
-After=network.target kalon-node.service
-Requires=kalon-node.service
-
-[Service]
-Type=simple
-User=$SERVICE_USER
-Group=$SERVICE_USER
-WorkingDirectory=$INSTALL_DIR/explorer/api
-ExecStart=$INSTALL_DIR/explorer/api/main
-Restart=always
-RestartSec=10
-StandardOutput=journal
-StandardError=journal
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Install Node.js for explorer (if not already installed)
-if ! command -v node &> /dev/null; then
-    echo -e "${YELLOW}Installing Node.js...${NC}"
-    curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
-    apt install -y nodejs
-fi
-
-# Install explorer dependencies
-if [ -d "$INSTALL_DIR/explorer/ui" ]; then
-    echo -e "${YELLOW}Installing explorer UI dependencies...${NC}"
-    cd "$INSTALL_DIR/explorer/ui"
-    sudo -u "$SERVICE_USER" npm install
-fi
-
-if [ -d "$INSTALL_DIR/explorer/api" ]; then
-    echo -e "${YELLOW}Building explorer API...${NC}"
-    cd "$INSTALL_DIR/explorer/api"
-    export PATH=$PATH:/usr/local/go/bin
-    go mod tidy
-    go build -o main main.go
-    chown "$SERVICE_USER:$SERVICE_USER" main
-fi
-
 # Reload systemd
 systemctl daemon-reload
 
@@ -222,16 +177,13 @@ echo "Starting Kalon Network..."
 systemctl start kalon-node
 sleep 5
 systemctl start kalon-miner
-systemctl start kalon-explorer
 echo "Kalon Network started!"
 echo "Node: http://localhost:16315"
-echo "Explorer: http://localhost:3000"
 EOF
 
 cat > /usr/local/bin/kalon-stop << 'EOF'
 #!/bin/bash
 echo "Stopping Kalon Network..."
-systemctl stop kalon-explorer
 systemctl stop kalon-miner
 systemctl stop kalon-node
 echo "Kalon Network stopped!"
@@ -244,8 +196,6 @@ echo "====================="
 systemctl status kalon-node --no-pager
 echo ""
 systemctl status kalon-miner --no-pager
-echo ""
-systemctl status kalon-explorer --no-pager
 EOF
 
 cat > /usr/local/bin/kalon-logs << 'EOF'
@@ -254,10 +204,8 @@ if [ "$1" = "node" ]; then
     journalctl -u kalon-node -f
 elif [ "$1" = "miner" ]; then
     journalctl -u kalon-miner -f
-elif [ "$1" = "explorer" ]; then
-    journalctl -u kalon-explorer -f
 else
-    echo "Usage: kalon-logs [node|miner|explorer]"
+    echo "Usage: kalon-logs [node|miner]"
 fi
 EOF
 
@@ -269,7 +217,6 @@ echo -e "${YELLOW}Configuring firewall...${NC}"
 if command -v ufw &> /dev/null; then
     ufw allow 16315/tcp comment "Kalon RPC"
     ufw allow 17334/tcp comment "Kalon P2P"
-    ufw allow 3000/tcp comment "Kalon Explorer"
     echo -e "${GREEN}Firewall rules added${NC}"
 fi
 
@@ -294,15 +241,18 @@ echo ""
 echo -e "${YELLOW}Service Management:${NC}"
 echo "  systemctl start kalon-node     - Start node only"
 echo "  systemctl start kalon-miner    - Start miner only"
-echo "  systemctl start kalon-explorer - Start explorer only"
 echo ""
 echo -e "${YELLOW}Access Points:${NC}"
 echo "  RPC API:    http://localhost:16315"
-echo "  Explorer:   http://localhost:3000"
 echo "  P2P Port:   17334"
 echo ""
 echo -e "${YELLOW}Data Directory:${NC}"
 echo "  $DATA_DIR"
 echo ""
 echo -e "${GREEN}To start the network, run: kalon-start${NC}"
+echo ""
+echo -e "${YELLOW}Next Steps:${NC}"
+echo "  1. Start the network: kalon-start"
+echo "  2. Create a wallet: kalon-wallet create"
+echo "  3. Configure with new wallet: ./scripts/setup-master-node.sh"
 echo ""

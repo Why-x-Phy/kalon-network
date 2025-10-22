@@ -9,10 +9,8 @@ import (
 	"log"
 	"os"
 	"strings"
-	"syscall"
 
 	"github.com/kalon-network/kalon/crypto"
-	"golang.org/x/term"
 )
 
 var version = "1.0.2"
@@ -99,12 +97,12 @@ func handleCreate(wm *WalletManager, args []string) {
 	// Get passphrase if not provided
 	if *passphrase == "" {
 		fmt.Print("Enter passphrase (optional): ")
-		pass, err := term.ReadPassword(int(syscall.Stdin))
+		reader := bufio.NewReader(os.Stdin)
+		pass, err := reader.ReadString('\n')
 		if err != nil {
 			log.Fatalf("Failed to read passphrase: %v", err)
 		}
-		*passphrase = string(pass)
-		fmt.Println()
+		*passphrase = strings.TrimSpace(pass)
 	}
 
 	// Create wallet
@@ -164,12 +162,12 @@ func handleImport(wm *WalletManager, args []string) {
 	// Get passphrase if not provided
 	if *passphrase == "" {
 		fmt.Print("Enter passphrase (optional): ")
-		pass, err := term.ReadPassword(int(syscall.Stdin))
+		reader := bufio.NewReader(os.Stdin)
+		pass, err := reader.ReadString('\n')
 		if err != nil {
 			log.Fatalf("Failed to read passphrase: %v", err)
 		}
-		*passphrase = string(pass)
-		fmt.Println()
+		*passphrase = strings.TrimSpace(pass)
 	}
 
 	// Create BIP39 manager

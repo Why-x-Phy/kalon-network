@@ -139,8 +139,18 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/rpc", s.handleRequest)
 
+	// Create server with timeouts and limits
+	server := &http.Server{
+		Addr:           s.addr,
+		Handler:        mux,
+		ReadTimeout:    30 * time.Second,
+		WriteTimeout:   30 * time.Second,
+		IdleTimeout:    60 * time.Second,
+		MaxHeaderBytes: 1 << 20, // 1MB
+	}
+
 	log.Printf("RPC server starting on %s", s.addr)
-	return http.ListenAndServe(s.addr, mux)
+	return server.ListenAndServe()
 }
 
 // handleRequest handles RPC requests
@@ -697,6 +707,7 @@ func (h *RPCHandler) handleCreateBlockTemplate(req *RPCRequest) *RPCResponse {
 	}
 
 	log.Printf("Created block template #%d with parent hash: %x", block.Header.Number, block.Header.ParentHash)
+	log.Printf("Best block hash: %x", h.blockchain.GetBestBlock().Hash)
 
 	return &RPCResponse{
 		JSONRPC: "2.0",

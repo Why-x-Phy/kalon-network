@@ -39,7 +39,12 @@ func NewBlockchain(genesis *GenesisConfig, storage Storage) *Blockchain {
 
 	// Create genesis block
 	genesisBlock := bc.createGenesisBlock()
+	// Calculate hash for genesis block (after all fields are set)
+	genesisBlock.Hash = genesisBlock.CalculateHash()
 	bc.addBlock(genesisBlock)
+
+	// Debug: Log genesis block hash
+	fmt.Printf("Genesis block hash: %x\n", genesisBlock.Hash)
 
 	return bc
 }
@@ -149,7 +154,7 @@ func (bc *Blockchain) CreateNewBlock(miner Address, txs []Transaction) *Block {
 
 	// Create block header
 	header := BlockHeader{
-		ParentHash:  parent.Hash,
+		ParentHash:  parent.Hash, // Use the actual parent hash
 		Number:      parent.Header.Number + 1,
 		Timestamp:   time.Now(),
 		Difficulty:  difficulty,
