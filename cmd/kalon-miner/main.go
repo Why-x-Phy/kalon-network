@@ -340,7 +340,7 @@ func (rpc *RPCBlockchain) GetBestBlock() *core.Block {
 // CreateNewBlock creates a new block template for mining
 func (rpc *RPCBlockchain) CreateNewBlock(miner core.Address, txs []core.Transaction) *core.Block {
 	// Add delay to prevent race conditions with node
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 
 	req := RPCRequest{
 		JSONRPC: "2.0",
@@ -468,7 +468,7 @@ func (rpc *RPCBlockchain) AddBlock(block *core.Block) error {
 	log.Printf("✅ Block #%d submitted to node: %x", block.Header.Number, block.Hash)
 
 	// Add delay after block submission to let node process it
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(1000 * time.Millisecond)
 
 	return nil
 }
