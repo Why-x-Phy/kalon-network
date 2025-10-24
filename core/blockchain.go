@@ -51,7 +51,7 @@ func NewBlockchain(genesis *GenesisConfig, storage Storage) *Blockchain {
 func (bc *Blockchain) createGenesisBlock() *Block {
 	// Use fixed timestamp for deterministic genesis block
 	genesisTimestamp := time.Unix(1609459200, 0) // 2021-01-01 00:00:00 UTC
-	
+
 	genesisBlock := &Block{
 		Header: BlockHeader{
 			ParentHash:  Hash{},
