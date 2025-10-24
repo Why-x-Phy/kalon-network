@@ -1,0 +1,487 @@
+package rpc
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"sync"
+	"time"
+
+	"github.com/kalon-network/kalon/core"
+)
+
+// ServerV2 represents a professional RPC server
+type ServerV2 struct {
+	addr        string
+	blockchain  *core.BlockchainV2
+	mu          sync.RWMutex
+	connections map[string]*Connection
+	eventBus    *core.EventBus
+	ctx         context.Context
+	cancel      context.CancelFunc
+}
+
+// Connection represents a client connection
+type Connection struct {
+	ID        string
+	CreatedAt time.Time
+	LastSeen  time.Time
+	Requests  int64
+}
+
+// NewServerV2 creates a new professional RPC server
+func NewServerV2(addr string, blockchain *core.BlockchainV2) *ServerV2 {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	server := &ServerV2{
+		addr:        addr,
+		blockchain:  blockchain,
+		connections: make(map[string]*Connection),
+		eventBus:    blockchain.GetEventBus(),
+		ctx:         ctx,
+		cancel:      cancel,
+	}
+
+	// Start connection cleanup routine
+	go server.cleanupConnections()
+
+	return server
+}
+
+// Start starts the RPC server professionally
+func (s *ServerV2) Start() error {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", s.handleRequest)
+	mux.HandleFunc("/health", s.handleHealth)
+	mux.HandleFunc("/rpc", s.handleRequest)
+
+	// Create server with professional settings
+	server := &http.Server{
+		Addr:           s.addr,
+		Handler:        s.limitConnections(mux),
+		ReadTimeout:    30 * time.Second,
+		WriteTimeout:   30 * time.Second,
+		IdleTimeout:    60 * time.Second,
+		MaxHeaderBytes: 1 << 20, // 1MB
+	}
+
+	log.Printf("🚀 Professional RPC Server starting on %s", s.addr)
+
+	// Start server in goroutine
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("RPC Server error: %v", err)
+		}
+	}()
+
+	// Wait for context cancellation
+	<-s.ctx.Done()
+
+	// Graceful shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	return server.Shutdown(ctx)
+}
+
+// Stop stops the RPC server
+func (s *ServerV2) Stop() {
+	s.cancel()
+}
+
+// handleRequest handles RPC requests professionally
+func (s *ServerV2) handleRequest(w http.ResponseWriter, r *http.Request) {
+	// Track connection
+	connID := r.RemoteAddr
+	s.trackConnection(connID)
+
+	// Parse request
+	var req RPCRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.writeError(w, nil, -32700, "Parse error", err.Error())
+		return
+	}
+
+	// Handle request
+	response := s.handleRPCMethod(&req)
+
+	// Write response
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// handleRPCMethod handles RPC methods professionally
+func (s *ServerV2) handleRPCMethod(req *RPCRequest) *RPCResponse {
+	switch req.Method {
+	case "getHeight":
+		return s.handleGetHeight(req)
+	case "getBestBlock":
+		return s.handleGetBestBlock(req)
+	case "createBlockTemplate":
+		return s.handleCreateBlockTemplateV2(req)
+	case "submitBlock":
+		return s.handleSubmitBlockV2(req)
+	case "getMiningInfo":
+		return s.handleGetMiningInfo(req)
+	default:
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32601,
+				Message: "Method not found",
+			},
+			ID: req.ID,
+		}
+	}
+}
+
+// handleGetHeight handles getHeight requests
+func (s *ServerV2) handleGetHeight(req *RPCRequest) *RPCResponse {
+	height := s.blockchain.GetHeight()
+	return &RPCResponse{
+		JSONRPC: "2.0",
+		Result:  height,
+		ID:      req.ID,
+	}
+}
+
+// handleGetBestBlock handles getBestBlock requests
+func (s *ServerV2) handleGetBestBlock(req *RPCRequest) *RPCResponse {
+	block := s.blockchain.GetBestBlock()
+	if block == nil {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32603,
+				Message: "Internal error",
+				Data:    "No blocks found",
+			},
+			ID: req.ID,
+		}
+	}
+
+	return &RPCResponse{
+		JSONRPC: "2.0",
+		Result: map[string]interface{}{
+			"hash":   hex.EncodeToString(block.Hash[:]),
+			"number": block.Header.Number,
+		},
+		ID: req.ID,
+	}
+}
+
+// handleCreateBlockTemplateV2 handles createBlockTemplate requests professionally
+func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
+	params, ok := req.Params.(map[string]interface{})
+	if !ok {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid params",
+			},
+			ID: req.ID,
+		}
+	}
+
+	minerStr, ok := params["miner"].(string)
+	if !ok {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid params",
+				Data:    "miner parameter required",
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Parse miner address
+	var miner core.Address
+	hash := sha256.Sum256([]byte(minerStr))
+	copy(miner[:], hash[:20])
+
+	// Get current blockchain state
+	bestBlock := s.blockchain.GetBestBlock()
+	if bestBlock == nil {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32603,
+				Message: "Internal error",
+				Data:    "No blocks found",
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Calculate difficulty for next block
+	consensus := s.blockchain.GetConsensus()
+	difficulty := consensus.CalculateDifficultyV2(bestBlock.Header.Number+1, bestBlock)
+
+	// Calculate next block number
+	nextNumber := bestBlock.Header.Number + 1
+
+	log.Printf("🔧 Creating template for block #%d with parent hash: %x", nextNumber, bestBlock.Hash)
+
+	return &RPCResponse{
+		JSONRPC: "2.0",
+		Result: map[string]interface{}{
+			"number":     nextNumber,
+			"difficulty": difficulty,
+			"parentHash": hex.EncodeToString(bestBlock.Hash[:]), // CRITICAL: Use actual parent hash
+			"timestamp":  time.Now().Unix(),
+			"miner":      hex.EncodeToString(miner[:]),
+		},
+		ID: req.ID,
+	}
+}
+
+// handleSubmitBlockV2 handles submitBlock requests professionally
+func (s *ServerV2) handleSubmitBlockV2(req *RPCRequest) *RPCResponse {
+	params, ok := req.Params.(map[string]interface{})
+	if !ok {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid params",
+			},
+			ID: req.ID,
+		}
+	}
+
+	blockData, ok := params["block"].(map[string]interface{})
+	if !ok {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid params",
+				Data:    "block parameter required",
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Parse block data
+	block, err := s.parseBlockData(blockData)
+	if err != nil {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid block data",
+				Data:    err.Error(),
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Submit block to blockchain
+	if err := s.blockchain.AddBlock(block); err != nil {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32603,
+				Message: "Block submission failed",
+				Data:    err.Error(),
+			},
+			ID: req.ID,
+		}
+	}
+
+	log.Printf("✅ Block #%d submitted successfully: %x", block.Header.Number, block.Hash)
+
+	return &RPCResponse{
+		JSONRPC: "2.0",
+		Result: map[string]interface{}{
+			"success": true,
+			"hash":    hex.EncodeToString(block.Hash[:]),
+			"number":  block.Header.Number,
+		},
+		ID: req.ID,
+	}
+}
+
+// parseBlockData parses block data from RPC request
+func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, error) {
+	// Parse number
+	number, ok := data["number"].(float64)
+	if !ok {
+		return nil, fmt.Errorf("invalid number")
+	}
+
+	// Parse difficulty
+	difficulty, ok := data["difficulty"].(float64)
+	if !ok {
+		return nil, fmt.Errorf("invalid difficulty")
+	}
+
+	// Parse nonce
+	nonce, ok := data["nonce"].(float64)
+	if !ok {
+		return nil, fmt.Errorf("invalid nonce")
+	}
+
+	// Parse hash
+	hashStr, ok := data["hash"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid hash")
+	}
+
+	hashBytes, err := hex.DecodeString(hashStr)
+	if err != nil || len(hashBytes) != 32 {
+		return nil, fmt.Errorf("invalid hash format")
+	}
+
+	// Parse parent hash
+	parentHashStr, ok := data["parentHash"].(string)
+	if !ok {
+		return nil, fmt.Errorf("invalid parentHash")
+	}
+
+	parentHashBytes, err := hex.DecodeString(parentHashStr)
+	if err != nil || len(parentHashBytes) != 32 {
+		return nil, fmt.Errorf("invalid parentHash format")
+	}
+
+	// Parse timestamp
+	timestamp, ok := data["timestamp"].(float64)
+	if !ok {
+		return nil, fmt.Errorf("invalid timestamp")
+	}
+
+	// Create block
+	block := &core.Block{
+		Header: core.BlockHeader{
+			Number:     uint64(number),
+			Difficulty: uint64(difficulty),
+			Nonce:      uint64(nonce),
+			Timestamp:  time.Unix(int64(timestamp), 0),
+		},
+		Txs: []core.Transaction{},
+	}
+
+	// Copy hashes
+	copy(block.Hash[:], hashBytes)
+	copy(block.Header.ParentHash[:], parentHashBytes)
+
+	return block, nil
+}
+
+// handleGetMiningInfo handles getMiningInfo requests
+func (s *ServerV2) handleGetMiningInfo(req *RPCRequest) *RPCResponse {
+	bestBlock := s.blockchain.GetBestBlock()
+	if bestBlock == nil {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32603,
+				Message: "Internal error",
+				Data:    "No blocks found",
+			},
+			ID: req.ID,
+		}
+	}
+
+	consensus := s.blockchain.GetConsensus()
+	difficulty := consensus.CalculateDifficultyV2(bestBlock.Header.Number+1, bestBlock)
+
+	return &RPCResponse{
+		JSONRPC: "2.0",
+		Result: map[string]interface{}{
+			"height":     s.blockchain.GetHeight(),
+			"difficulty": difficulty,
+			"bestBlock":  hex.EncodeToString(bestBlock.Hash[:]),
+		},
+		ID: req.ID,
+	}
+}
+
+// handleHealth handles health check requests
+func (s *ServerV2) handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":    "ok",
+		"timestamp": time.Now(),
+		"version":   "2.0",
+		"height":    s.blockchain.GetHeight(),
+	})
+}
+
+// writeError writes an error response
+func (s *ServerV2) writeError(w http.ResponseWriter, id interface{}, code int, message, data string) {
+	response := RPCResponse{
+		JSONRPC: "2.0",
+		Error: &RPCError{
+			Code:    code,
+			Message: message,
+			Data:    data,
+		},
+		ID: id,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// limitConnections limits concurrent connections professionally
+func (s *ServerV2) limitConnections(h http.Handler) http.Handler {
+	semaphore := make(chan struct{}, 50) // Max 50 concurrent connections
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case semaphore <- struct{}{}:
+			defer func() { <-semaphore }()
+			h.ServeHTTP(w, r)
+		default:
+			http.Error(w, "Too many connections", http.StatusServiceUnavailable)
+		}
+	})
+}
+
+// trackConnection tracks a client connection
+func (s *ServerV2) trackConnection(connID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if conn, exists := s.connections[connID]; exists {
+		conn.LastSeen = time.Now()
+		conn.Requests++
+	} else {
+		s.connections[connID] = &Connection{
+			ID:        connID,
+			CreatedAt: time.Now(),
+			LastSeen:  time.Now(),
+			Requests:  1,
+		}
+	}
+}
+
+// cleanupConnections cleans up old connections
+func (s *ServerV2) cleanupConnections() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			s.mu.Lock()
+			now := time.Now()
+			for id, conn := range s.connections {
+				if now.Sub(conn.LastSeen) > 10*time.Minute {
+					delete(s.connections, id)
+				}
+			}
+			s.mu.Unlock()
+		case <-s.ctx.Done():
+			return
+		}
+	}
+}
