@@ -154,7 +154,53 @@ func (a Address) Bytes() []byte {
 
 // CalculateHash calculates the hash of a block
 func (b *Block) CalculateHash() Hash {
-	data, _ := json.Marshal(b.Header)
+	// Create deterministic hash without JSON marshalling
+	data := make([]byte, 0, 200)
+	
+	// Add parent hash
+	data = append(data, b.Header.ParentHash[:]...)
+	
+	// Add number (8 bytes)
+	numberBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(numberBytes, b.Header.Number)
+	data = append(data, numberBytes...)
+	
+	// Add timestamp (8 bytes - Unix timestamp)
+	timestampBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(timestampBytes, uint64(b.Header.Timestamp.Unix()))
+	data = append(data, timestampBytes...)
+	
+	// Add difficulty (8 bytes)
+	difficultyBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(difficultyBytes, b.Header.Difficulty)
+	data = append(data, difficultyBytes...)
+	
+	// Add miner address
+	data = append(data, b.Header.Miner[:]...)
+	
+	// Add nonce (8 bytes)
+	nonceBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(nonceBytes, b.Header.Nonce)
+	data = append(data, nonceBytes...)
+	
+	// Add merkle root
+	data = append(data, b.Header.MerkleRoot[:]...)
+	
+	// Add tx count (4 bytes)
+	txCountBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(txCountBytes, b.Header.TxCount)
+	data = append(data, txCountBytes...)
+	
+	// Add network fee (8 bytes)
+	networkFeeBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(networkFeeBytes, b.Header.NetworkFee)
+	data = append(data, networkFeeBytes...)
+	
+	// Add treasury fee (8 bytes)
+	treasuryFeeBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(treasuryFeeBytes, b.Header.TreasuryFee)
+	data = append(data, treasuryFeeBytes...)
+	
 	hash := sha256.Sum256(data)
 	return Hash(hash)
 }

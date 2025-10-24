@@ -49,11 +49,14 @@ func NewBlockchain(genesis *GenesisConfig, storage Storage) *Blockchain {
 
 // createGenesisBlock creates the genesis block
 func (bc *Blockchain) createGenesisBlock() *Block {
+	// Use fixed timestamp for deterministic genesis block
+	genesisTimestamp := time.Unix(1609459200, 0) // 2021-01-01 00:00:00 UTC
+	
 	genesisBlock := &Block{
 		Header: BlockHeader{
 			ParentHash:  Hash{},
 			Number:      0,
-			Timestamp:   time.Now(),
+			Timestamp:   genesisTimestamp,
 			Difficulty:  bc.genesis.Difficulty.InitialDifficulty,
 			Miner:       Address{},
 			Nonce:       0,
