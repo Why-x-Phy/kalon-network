@@ -146,9 +146,9 @@ func (s *Server) Start() error {
 	server := &http.Server{
 		Addr:           s.addr,
 		Handler:        s.limitConnections(mux),
-		ReadTimeout:    10 * time.Second, // Shorter timeouts
-		WriteTimeout:   10 * time.Second, // Shorter timeouts
-		IdleTimeout:    30 * time.Second, // Shorter timeouts
+		ReadTimeout:    30 * time.Second, // Reasonable timeouts
+		WriteTimeout:   30 * time.Second, // Reasonable timeouts
+		IdleTimeout:    60 * time.Second, // Reasonable timeouts
 		MaxHeaderBytes: 1 << 20,          // 1MB
 	}
 
@@ -158,7 +158,7 @@ func (s *Server) Start() error {
 
 // limitConnections limits the number of concurrent connections
 func (s *Server) limitConnections(h http.Handler) http.Handler {
-	semaphore := make(chan struct{}, 2) // Max 2 concurrent connections (ULTRA RADICAL FIX)
+	semaphore := make(chan struct{}, 10) // Max 10 concurrent connections (reasonable limit)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		select {
@@ -716,31 +716,27 @@ func (h *RPCHandler) handleCreateBlockTemplate(req *RPCRequest) *RPCResponse {
 	log.Printf("RPC Server - Best block hash: %x", bestBlock.Hash)
 	log.Printf("RPC Server - Best block number: %d", bestBlock.Header.Number)
 
-	// CRITICAL FIX: Use blockchain.CreateNewBlock() to get correct parent hash
-	block := h.blockchain.CreateNewBlock(miner, []core.Transaction{})
-	if block == nil {
-		return &RPCResponse{
-			JSONRPC: "2.0",
-			Error: &RPCError{
-				Code:    -32603,
-				Message: "Internal error",
-				Data:    "Failed to create block template",
-			},
-			ID: req.ID,
-		}
-	}
-
-	log.Printf("Created block template #%d with parent hash: %x", block.Header.Number, block.Header.ParentHash)
-	log.Printf("Template parent hash should be: %x", bestBlock.Hash)
+	// CRITICAL FIX: Don't create new block, just return template data
+	// This prevents race conditions between RPC server and miner
+	
+	// Calculate difficulty for next block
+	consensus := h.blockchain.GetConsensus()
+	difficulty := consensus.CalculateDifficulty(bestBlock.Header.Number+1, bestBlock)
+	
+	// Calculate next block number
+	nextNumber := bestBlock.Header.Number + 1
+	
+	log.Printf("RPC Server - Creating template for block #%d with parent hash: %x", nextNumber, bestBlock.Hash)
+	log.Printf("RPC Server - Template parent hash: %x", bestBlock.Hash)
 
 	return &RPCResponse{
 		JSONRPC: "2.0",
 		Result: map[string]interface{}{
-			"number":     block.Header.Number,
-			"difficulty": block.Header.Difficulty,
-			"parentHash": hex.EncodeToString(block.Header.ParentHash[:]),
-			"timestamp":  block.Header.Timestamp.Unix(),
-			"miner":      hex.EncodeToString(block.Header.Miner[:]),
+			"number":     nextNumber,
+			"difficulty": difficulty,
+			"parentHash": hex.EncodeToString(bestBlock.Hash[:]),
+			"timestamp":  time.Now().Unix(),
+			"miner":      hex.EncodeToString(miner[:]),
 		},
 		ID: req.ID,
 	}
