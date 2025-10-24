@@ -716,16 +716,18 @@ func (h *RPCHandler) handleCreateBlockTemplate(req *RPCRequest) *RPCResponse {
 	log.Printf("RPC Server - Best block hash: %x", bestBlock.Hash)
 	log.Printf("RPC Server - Best block number: %d", bestBlock.Header.Number)
 
-	// CRITICAL FIX: Create block template with CORRECT parent hash
-	block := &core.Block{
-		Header: core.BlockHeader{
-			ParentHash: bestBlock.Hash, // Use the ACTUAL best block hash
-			Number:     bestBlock.Header.Number + 1,
-			Timestamp:  time.Now(),
-			Difficulty: 4, // Testnet difficulty
-			Miner:      miner,
-			Nonce:      0,
-		},
+	// CRITICAL FIX: Use blockchain.CreateNewBlock() to get correct parent hash
+	block := h.blockchain.CreateNewBlock(miner, []core.Transaction{})
+	if block == nil {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32603,
+				Message: "Internal error",
+				Data:    "Failed to create block template",
+			},
+			ID: req.ID,
+		}
 	}
 
 	log.Printf("Created block template #%d with parent hash: %x", block.Header.Number, block.Header.ParentHash)
