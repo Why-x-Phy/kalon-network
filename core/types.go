@@ -16,8 +16,22 @@ type Address [20]byte
 
 // AddressFromString converts a bech32 address string to Address
 func AddressFromString(addrStr string) Address {
-	// For now, we'll use a simple hash-based conversion
-	// In a real implementation, you'd decode the bech32 address
+	// Remove "kalon1" prefix if present
+	if strings.HasPrefix(addrStr, "kalon1") {
+		addrStr = addrStr[6:] // Remove "kalon1" prefix
+	}
+	
+	// Try to decode as hex
+	if len(addrStr) == 40 { // 20 bytes = 40 hex chars
+		bytes, err := hex.DecodeString(addrStr)
+		if err == nil && len(bytes) == 20 {
+			var addr Address
+			copy(addr[:], bytes)
+			return addr
+		}
+	}
+	
+	// Fallback: hash the string and take first 20 bytes
 	hash := sha256.Sum256([]byte(addrStr))
 	var addr Address
 	copy(addr[:], hash[:20])
