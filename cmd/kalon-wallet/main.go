@@ -2,13 +2,17 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/kalon-network/kalon/crypto"
 )
@@ -18,6 +22,30 @@ var version = "1.0.2"
 // WalletManager handles wallet operations
 type WalletManager struct {
 	wallet *crypto.Wallet
+	rpcURL string
+	client *http.Client
+}
+
+// RPCRequest represents an RPC request
+type RPCRequest struct {
+	JSONRPC string      `json:"jsonrpc"`
+	Method  string      `json:"method"`
+	Params  interface{} `json:"params"`
+	ID      int         `json:"id"`
+}
+
+// RPCResponse represents an RPC response
+type RPCResponse struct {
+	JSONRPC string      `json:"jsonrpc"`
+	Result  interface{} `json:"result"`
+	Error   *RPCError   `json:"error,omitempty"`
+	ID      int         `json:"id"`
+}
+
+// RPCError represents an RPC error
+type RPCError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
 }
 
 // TransactionRequest represents a transaction request
@@ -374,11 +402,54 @@ func loadWallet(filename string) (*WalletInfo, error) {
 
 // queryBalance queries balance via RPC
 func queryBalance(rpcURL, address string) (uint64, error) {
-	// This is a simplified implementation
-	// In a real implementation, you would make an HTTP request to the RPC server
+	// Create RPC request
+	req := RPCRequest{
+		JSONRPC: "2.0",
+		Method:  "getBalance",
+		Params: map[string]string{
+			"address": address,
+		},
+		ID: 1,
+	}
 
-	// For now, return a mock balance
-	return 1000000, nil // 1 KALON in micro-KALON
+	// Marshal request
+	reqData, err := json.Marshal(req)
+	if err != nil {
+		return 0, fmt.Errorf("failed to marshal request: %v", err)
+	}
+
+	// Make HTTP request
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Post(rpcURL, "application/json", bytes.NewBuffer(reqData))
+	if err != nil {
+		return 0, fmt.Errorf("failed to make request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read response: %v", err)
+	}
+
+	// Parse response
+	var rpcResp RPCResponse
+	if err := json.Unmarshal(body, &rpcResp); err != nil {
+		return 0, fmt.Errorf("failed to parse response: %v", err)
+	}
+
+	// Check for RPC error
+	if rpcResp.Error != nil {
+		return 0, fmt.Errorf("RPC error: %s", rpcResp.Error.Message)
+	}
+
+	// Extract balance from result
+	balance, ok := rpcResp.Result.(float64)
+	if !ok {
+		return 0, fmt.Errorf("invalid balance format in response")
+	}
+
+	return uint64(balance), nil
 }
 
 // sendTransaction sends a transaction via RPC

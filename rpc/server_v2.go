@@ -127,6 +127,8 @@ func (s *ServerV2) handleRPCMethod(req *RPCRequest) *RPCResponse {
 		return s.handleSubmitBlockV2(req)
 	case "getMiningInfo":
 		return s.handleGetMiningInfo(req)
+	case "getBalance":
+		return s.handleGetBalance(req)
 	default:
 		return &RPCResponse{
 			JSONRPC: "2.0",
@@ -401,6 +403,53 @@ func (s *ServerV2) handleGetMiningInfo(req *RPCRequest) *RPCResponse {
 			"bestBlock":  hex.EncodeToString(bestBlock.Hash[:]),
 		},
 		ID: req.ID,
+	}
+}
+
+// handleGetBalance handles getBalance requests
+func (s *ServerV2) handleGetBalance(req *RPCRequest) *RPCResponse {
+	// Parse parameters
+	params, ok := req.Params.(map[string]interface{})
+	if !ok {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid params",
+				Data:    "Expected object with 'address' field",
+			},
+			ID: req.ID,
+		}
+	}
+
+	addressStr, ok := params["address"].(string)
+	if !ok {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid params",
+				Data:    "Missing or invalid 'address' field",
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Convert string address to Address type
+	var address core.Address
+	if len(addressStr) > 0 {
+		// For now, we'll use a simple conversion
+		// In a real implementation, you'd parse the bech32 address
+		copy(address[:], []byte(addressStr)[:32])
+	}
+
+	// Get balance from blockchain
+	balance := s.blockchain.GetBalance(address)
+
+	return &RPCResponse{
+		JSONRPC: "2.0",
+		Result:  balance,
+		ID:      req.ID,
 	}
 }
 

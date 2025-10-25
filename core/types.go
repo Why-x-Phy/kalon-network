@@ -45,6 +45,23 @@ type Transaction struct {
 	Data      []byte  `json:"data"`
 	Signature []byte  `json:"signature"`
 	Hash      Hash    `json:"hash"`
+	// UTXO-based fields
+	Inputs    []TxInput  `json:"inputs"`
+	Outputs   []TxOutput `json:"outputs"`
+	Timestamp time.Time  `json:"timestamp"`
+}
+
+// TxInput represents a transaction input (UTXO reference)
+type TxInput struct {
+	PreviousTxHash Hash   `json:"previousTxHash"`
+	Index          uint32 `json:"index"`
+	Signature      []byte `json:"signature"`
+}
+
+// TxOutput represents a transaction output (UTXO creation)
+type TxOutput struct {
+	Address Address `json:"address"`
+	Amount  uint64  `json:"amount"`
 }
 
 // GenesisConfig represents the genesis configuration

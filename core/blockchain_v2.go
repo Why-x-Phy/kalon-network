@@ -18,6 +18,7 @@ type BlockchainV2 struct {
 	consensus    *ConsensusV2
 	eventBus     *EventBus
 	stateManager *StateManager
+	utxoSet      *UTXOSet
 }
 
 // EventBus handles blockchain events
@@ -58,6 +59,7 @@ func NewBlockchainV2(genesis *GenesisConfig) *BlockchainV2 {
 		consensus:    NewConsensusV2(),
 		eventBus:     NewEventBus(),
 		stateManager: NewStateManager(),
+		utxoSet:      NewUTXOSet(),
 	}
 
 	// Create genesis block
@@ -84,7 +86,7 @@ func NewStateManager() *StateManager {
 // NewConsensusV2 creates a new consensus mechanism
 func NewConsensusV2() *ConsensusV2 {
 	return &ConsensusV2{
-		difficulty: 1, // Use initial difficulty from genesis config
+		difficulty: 1,             // Use initial difficulty from genesis config
 		target:     1 << (64 - 1), // 1 difficulty = 2^63 target
 		blockTime:  30 * time.Second,
 		adjustment: NewDifficultyAdjustment(),
@@ -137,6 +139,11 @@ func (bc *BlockchainV2) addBlockV2(block *Block) error {
 		return fmt.Errorf("block validation failed: %v", err)
 	}
 
+	// Process UTXOs for all transactions in the block
+	for _, tx := range block.Txs {
+		bc.processTransactionUTXOs(&tx, block.Hash)
+	}
+
 	// Add block atomically
 	bc.blocks = append(bc.blocks, block)
 	bc.height = block.Header.Number
@@ -155,6 +162,29 @@ func (bc *BlockchainV2) addBlockV2(block *Block) error {
 	log.Printf("✅ Block #%d added successfully: %x", block.Header.Number, block.Hash)
 
 	return nil
+}
+
+// processTransactionUTXOs processes UTXOs for a transaction
+func (bc *BlockchainV2) processTransactionUTXOs(tx *Transaction, blockHash Hash) {
+	// Mark input UTXOs as spent
+	for _, input := range tx.Inputs {
+		bc.utxoSet.SpendUTXO(input.PreviousTxHash, input.Index)
+	}
+
+	// Create new UTXOs for outputs
+	for i, output := range tx.Outputs {
+		bc.utxoSet.AddUTXO(tx.Hash, uint32(i), output.Amount, output.Address, blockHash)
+	}
+}
+
+// GetBalance returns the balance for an address
+func (bc *BlockchainV2) GetBalance(address Address) uint64 {
+	return bc.utxoSet.GetBalance(address)
+}
+
+// GetUTXOs returns all UTXOs for an address
+func (bc *BlockchainV2) GetUTXOs(address Address) []*UTXO {
+	return bc.utxoSet.GetUTXOs(address)
 }
 
 // validateBlockV2 validates a block professionally
@@ -230,6 +260,13 @@ func (bc *BlockchainV2) CreateNewBlockV2(miner Address, txs []Transaction) *Bloc
 	// Calculate difficulty
 	difficulty := bc.consensus.CalculateDifficultyV2(parent.Header.Number+1, parent)
 
+	// Create block reward transaction
+	blockReward := bc.calculateBlockReward(parent.Header.Number + 1)
+	rewardTx := bc.createBlockRewardTransaction(miner, blockReward)
+
+	// Add reward transaction to the beginning of transactions
+	allTxs := append([]Transaction{rewardTx}, txs...)
+
 	// Create block template
 	block := &Block{
 		Header: BlockHeader{
@@ -240,11 +277,11 @@ func (bc *BlockchainV2) CreateNewBlockV2(miner Address, txs []Transaction) *Bloc
 			Miner:       miner,
 			Nonce:       0,
 			MerkleRoot:  Hash{}, // TODO: Calculate merkle root
-			TxCount:     uint32(len(txs)),
+			TxCount:     uint32(len(allTxs)),
 			NetworkFee:  0,
 			TreasuryFee: 0,
 		},
-		Txs:  txs,
+		Txs:  allTxs,
 		Hash: Hash{},
 	}
 
@@ -252,6 +289,50 @@ func (bc *BlockchainV2) CreateNewBlockV2(miner Address, txs []Transaction) *Bloc
 	block.Hash = block.CalculateHash()
 
 	return block
+}
+
+// calculateBlockReward calculates the block reward for a given block number
+func (bc *BlockchainV2) calculateBlockReward(blockNumber uint64) uint64 {
+	// Start with initial block reward (5 tKALON = 5,000,000 units)
+	reward := uint64(bc.genesis.InitialBlockReward * 1000000) // Convert to smallest units
+
+	// Apply halving schedule
+	for _, halving := range bc.genesis.HalvingSchedule {
+		if blockNumber > halving.AfterBlocks {
+			reward = uint64(float64(reward) * halving.RewardMultiplier)
+		}
+	}
+
+	return reward
+}
+
+// createBlockRewardTransaction creates a block reward transaction
+func (bc *BlockchainV2) createBlockRewardTransaction(miner Address, amount uint64) Transaction {
+	// Create a special coinbase transaction (no inputs, only output)
+	tx := Transaction{
+		From:      Address{}, // Empty for coinbase
+		To:        miner,
+		Amount:    amount,
+		Nonce:     0,
+		Fee:       0,
+		GasUsed:   0,
+		GasPrice:  0,
+		Data:      []byte("block_reward"),
+		Signature: []byte{},    // No signature needed for coinbase
+		Inputs:    []TxInput{}, // No inputs for coinbase
+		Outputs: []TxOutput{
+			{
+				Address: miner,
+				Amount:  amount,
+			},
+		},
+		Timestamp: time.Now(),
+	}
+
+	// Calculate transaction hash
+	tx.Hash = CalculateTransactionHash(&tx)
+
+	return tx
 }
 
 // AddBlock adds a block to the blockchain
