@@ -475,17 +475,39 @@ func (rpc *RPCBlockchainV2) CreateNewBlock(miner core.Address, txs []core.Transa
 
 // AddBlock submits a mined block
 func (rpc *RPCBlockchainV2) AddBlock(block *core.Block) error {
+	// Convert transactions to JSON format
+	var transactions []map[string]interface{}
+	for _, tx := range block.Txs {
+		txMap := map[string]interface{}{
+			"from":      tx.From.String(),
+			"to":        tx.To.String(),
+			"amount":    float64(tx.Amount),
+			"nonce":     float64(tx.Nonce),
+			"fee":       float64(tx.Fee),
+			"gasUsed":   float64(tx.GasUsed),
+			"gasPrice":  float64(tx.GasPrice),
+			"data":      tx.Data,
+			"signature": tx.Signature,
+			"hash":      hex.EncodeToString(tx.Hash[:]),
+			"inputs":    tx.Inputs,
+			"outputs":   tx.Outputs,
+			"timestamp": tx.Timestamp.Format(time.RFC3339),
+		}
+		transactions = append(transactions, txMap)
+	}
+
 	req := RPCRequest{
 		JSONRPC: "2.0",
 		Method:  "submitBlock",
 		Params: map[string]interface{}{
 			"block": map[string]interface{}{
-				"number":     float64(block.Header.Number),
-				"difficulty": float64(block.Header.Difficulty),
-				"nonce":      float64(block.Header.Nonce),
-				"hash":       hex.EncodeToString(block.Hash[:]),
-				"parentHash": hex.EncodeToString(block.Header.ParentHash[:]),
-				"timestamp":  float64(block.Header.Timestamp.Unix()),
+				"number":       float64(block.Header.Number),
+				"difficulty":   float64(block.Header.Difficulty),
+				"nonce":        float64(block.Header.Nonce),
+				"hash":         hex.EncodeToString(block.Hash[:]),
+				"parentHash":   hex.EncodeToString(block.Header.ParentHash[:]),
+				"timestamp":    float64(block.Header.Timestamp.Unix()),
+				"transactions": transactions, // CRITICAL: Include transactions!
 			},
 		},
 		ID: 3,
