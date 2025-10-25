@@ -293,8 +293,8 @@ func (s *ServerV2) handleSubmitBlockV2(req *RPCRequest) *RPCResponse {
 		}
 	}
 
-	// Submit block to blockchain
-	if err := s.blockchain.AddBlock(block); err != nil {
+	// Submit block to blockchain using V2 function
+	if err := s.blockchain.AddBlockV2(block); err != nil {
 		return &RPCResponse{
 			JSONRPC: "2.0",
 			Error: &RPCError{
