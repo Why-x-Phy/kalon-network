@@ -170,7 +170,7 @@ func (m *MinerV2) mineBlock(workerID int) {
 		return
 	}
 
-	// Create new block template
+	// Create new block template with transactions from RPC server
 	block := m.blockchain.CreateNewBlock(miner, []core.Transaction{})
 	if block == nil {
 		log.Printf("❌ Failed to create block template")
@@ -350,7 +350,104 @@ func (rpc *RPCBlockchainV2) CreateNewBlock(miner core.Address, txs []core.Transa
 	var parentHash core.Hash
 	copy(parentHash[:], parentHashBytes)
 
-	// Create block
+	// CRITICAL: Extract transactions from RPC response
+	var blockTxs []core.Transaction
+	if txsData, ok := result["transactions"].([]interface{}); ok {
+		for _, txData := range txsData {
+			if txMap, ok := txData.(map[string]interface{}); ok {
+				// Parse transaction from map
+				tx := core.Transaction{}
+				
+				// Parse From address
+				if fromStr, ok := txMap["from"].(string); ok {
+					tx.From = core.AddressFromString(fromStr)
+				}
+				
+				// Parse To address
+				if toStr, ok := txMap["to"].(string); ok {
+					tx.To = core.AddressFromString(toStr)
+				}
+				
+				// Parse Amount
+				if amount, ok := txMap["amount"].(float64); ok {
+					tx.Amount = uint64(amount)
+				}
+				
+				// Parse other fields
+				if nonce, ok := txMap["nonce"].(float64); ok {
+					tx.Nonce = uint64(nonce)
+				}
+				if fee, ok := txMap["fee"].(float64); ok {
+					tx.Fee = uint64(fee)
+				}
+				if gasUsed, ok := txMap["gasUsed"].(float64); ok {
+					tx.GasUsed = uint64(gasUsed)
+				}
+				if gasPrice, ok := txMap["gasPrice"].(float64); ok {
+					tx.GasPrice = uint64(gasPrice)
+				}
+				if data, ok := txMap["data"].([]byte); ok {
+					tx.Data = data
+				}
+				if signature, ok := txMap["signature"].([]byte); ok {
+					tx.Signature = signature
+				}
+				if hashStr, ok := txMap["hash"].(string); ok {
+					if hashBytes, err := hex.DecodeString(hashStr); err == nil {
+						copy(tx.Hash[:], hashBytes)
+					}
+				}
+				
+				// Parse UTXO fields
+				if inputs, ok := txMap["inputs"].([]interface{}); ok {
+					for _, inputData := range inputs {
+						if inputMap, ok := inputData.(map[string]interface{}); ok {
+							input := core.TxInput{}
+							if prevTxHashStr, ok := inputMap["previousTxHash"].(string); ok {
+								if prevTxHashBytes, err := hex.DecodeString(prevTxHashStr); err == nil {
+									copy(input.PreviousTxHash[:], prevTxHashBytes)
+								}
+							}
+							if index, ok := inputMap["index"].(float64); ok {
+								input.Index = uint32(index)
+							}
+							if signature, ok := inputMap["signature"].([]byte); ok {
+								input.Signature = signature
+							}
+							tx.Inputs = append(tx.Inputs, input)
+						}
+					}
+				}
+				
+				if outputs, ok := txMap["outputs"].([]interface{}); ok {
+					for _, outputData := range outputs {
+						if outputMap, ok := outputData.(map[string]interface{}); ok {
+							output := core.TxOutput{}
+							if addressStr, ok := outputMap["address"].(string); ok {
+								output.Address = core.AddressFromString(addressStr)
+							}
+							if amount, ok := outputMap["amount"].(float64); ok {
+								output.Amount = uint64(amount)
+							}
+							tx.Outputs = append(tx.Outputs, output)
+						}
+					}
+				}
+				
+				// Parse timestamp
+				if timestamp, ok := txMap["timestamp"].(string); ok {
+					if t, err := time.Parse(time.RFC3339, timestamp); err == nil {
+						tx.Timestamp = t
+					}
+				}
+				
+				blockTxs = append(blockTxs, tx)
+				log.Printf("💰 Loaded transaction with %d outputs, total amount: %d", len(tx.Outputs), tx.Amount)
+			}
+		}
+	}
+
+	// Create block with transactions from RPC server
 	block := &core.Block{
 		Header: core.BlockHeader{
 			ParentHash:  parentHash, // CRITICAL: Use actual parent hash
@@ -360,18 +457,18 @@ func (rpc *RPCBlockchainV2) CreateNewBlock(miner core.Address, txs []core.Transa
 			Miner:       miner,
 			Nonce:       0,
 			MerkleRoot:  core.Hash{},
-			TxCount:     uint32(len(txs)),
+			TxCount:     uint32(len(blockTxs)),
 			NetworkFee:  0,
 			TreasuryFee: 0,
 		},
-		Txs:  txs,
+		Txs:  blockTxs, // Use transactions from RPC server
 		Hash: core.Hash{},
 	}
 
 	// Calculate hash
 	block.Hash = block.CalculateHash()
 
-	log.Printf("🔧 Created block template #%d with parent hash: %x", block.Header.Number, block.Header.ParentHash)
+	log.Printf("🔧 Created block template #%d with %d transactions and parent hash: %x", block.Header.Number, len(blockTxs), block.Header.ParentHash)
 
 	return block
 }
