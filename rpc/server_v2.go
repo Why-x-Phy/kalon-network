@@ -367,7 +367,104 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 		return nil, fmt.Errorf("invalid timestamp")
 	}
 
-	// Create block
+	// Parse transactions from block data
+	var transactions []core.Transaction
+	if txsData, ok := data["transactions"].([]interface{}); ok {
+		for _, txData := range txsData {
+			if txMap, ok := txData.(map[string]interface{}); ok {
+				// Parse transaction from map
+				tx := core.Transaction{}
+				
+				// Parse From address
+				if fromStr, ok := txMap["from"].(string); ok {
+					tx.From = core.AddressFromString(fromStr)
+				}
+				
+				// Parse To address
+				if toStr, ok := txMap["to"].(string); ok {
+					tx.To = core.AddressFromString(toStr)
+				}
+				
+				// Parse Amount
+				if amount, ok := txMap["amount"].(float64); ok {
+					tx.Amount = uint64(amount)
+				}
+				
+				// Parse other fields
+				if nonce, ok := txMap["nonce"].(float64); ok {
+					tx.Nonce = uint64(nonce)
+				}
+				if fee, ok := txMap["fee"].(float64); ok {
+					tx.Fee = uint64(fee)
+				}
+				if gasUsed, ok := txMap["gasUsed"].(float64); ok {
+					tx.GasUsed = uint64(gasUsed)
+				}
+				if gasPrice, ok := txMap["gasPrice"].(float64); ok {
+					tx.GasPrice = uint64(gasPrice)
+				}
+				if data, ok := txMap["data"].([]byte); ok {
+					tx.Data = data
+				}
+				if signature, ok := txMap["signature"].([]byte); ok {
+					tx.Signature = signature
+				}
+				if hashStr, ok := txMap["hash"].(string); ok {
+					if hashBytes, err := hex.DecodeString(hashStr); err == nil {
+						copy(tx.Hash[:], hashBytes)
+					}
+				}
+				
+				// Parse UTXO fields
+				if inputs, ok := txMap["inputs"].([]interface{}); ok {
+					for _, inputData := range inputs {
+						if inputMap, ok := inputData.(map[string]interface{}); ok {
+							input := core.TxInput{}
+							if prevTxHashStr, ok := inputMap["previousTxHash"].(string); ok {
+								if prevTxHashBytes, err := hex.DecodeString(prevTxHashStr); err == nil {
+									copy(input.PreviousTxHash[:], prevTxHashBytes)
+								}
+							}
+							if index, ok := inputMap["index"].(float64); ok {
+								input.Index = uint32(index)
+							}
+							if signature, ok := inputMap["signature"].([]byte); ok {
+								input.Signature = signature
+							}
+							tx.Inputs = append(tx.Inputs, input)
+						}
+					}
+				}
+				
+				if outputs, ok := txMap["outputs"].([]interface{}); ok {
+					for _, outputData := range outputs {
+						if outputMap, ok := outputData.(map[string]interface{}); ok {
+							output := core.TxOutput{}
+							if addressStr, ok := outputMap["address"].(string); ok {
+								output.Address = core.AddressFromString(addressStr)
+							}
+							if amount, ok := outputMap["amount"].(float64); ok {
+								output.Amount = uint64(amount)
+							}
+							tx.Outputs = append(tx.Outputs, output)
+						}
+					}
+				}
+				
+				// Parse timestamp
+				if timestamp, ok := txMap["timestamp"].(string); ok {
+					if t, err := time.Parse(time.RFC3339, timestamp); err == nil {
+						tx.Timestamp = t
+					}
+				}
+				
+				transactions = append(transactions, tx)
+				log.Printf("💰 Parsed transaction with %d outputs, total amount: %d", len(tx.Outputs), tx.Amount)
+			}
+		}
+	}
+
+	// Create block with transactions
 	block := &core.Block{
 		Header: core.BlockHeader{
 			Number:     uint64(number),
@@ -375,7 +472,7 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 			Nonce:      uint64(nonce),
 			Timestamp:  time.Unix(int64(timestamp), 0),
 		},
-		Txs: []core.Transaction{},
+		Txs: transactions, // Use parsed transactions
 	}
 
 	// Copy hashes
