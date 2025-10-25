@@ -3,6 +3,7 @@ package crypto
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/kalon-network/kalon/core"
