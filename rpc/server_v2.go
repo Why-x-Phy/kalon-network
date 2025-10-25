@@ -222,23 +222,31 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 		}
 	}
 
-	// Calculate difficulty for next block
-	consensus := s.blockchain.GetConsensus()
-	difficulty := consensus.CalculateDifficultyV2(bestBlock.Header.Number+1, bestBlock)
+	// Create new block with rewards using CreateNewBlockV2
+	block := s.blockchain.CreateNewBlockV2(miner, []core.Transaction{})
+	if block == nil {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32603,
+				Message: "Internal error",
+				Data:    "Failed to create block template",
+			},
+			ID: req.ID,
+		}
+	}
 
-	// Calculate next block number
-	nextNumber := bestBlock.Header.Number + 1
-
-	log.Printf("🔧 Creating template for block #%d with parent hash: %x", nextNumber, bestBlock.Hash)
+	log.Printf("🔧 Creating template for block #%d with parent hash: %x", block.Header.Number, block.Header.ParentHash)
 
 	return &RPCResponse{
 		JSONRPC: "2.0",
 		Result: map[string]interface{}{
-			"number":     nextNumber,
-			"difficulty": difficulty,
-			"parentHash": hex.EncodeToString(bestBlock.Hash[:]), // CRITICAL: Use actual parent hash
-			"timestamp":  time.Now().Unix(),
-			"miner":      hex.EncodeToString(miner[:]),
+			"number":       block.Header.Number,
+			"difficulty":   block.Header.Difficulty,
+			"parentHash":   hex.EncodeToString(block.Header.ParentHash[:]),
+			"timestamp":    block.Header.Timestamp.Unix(),
+			"miner":        hex.EncodeToString(block.Header.Miner[:]),
+			"transactions": block.Txs, // Include transactions with block rewards
 		},
 		ID: req.ID,
 	}

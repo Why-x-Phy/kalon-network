@@ -35,7 +35,7 @@ func ParseAddress(addrStr string) (Address, error) {
 	if strings.HasPrefix(addrStr, "kalon1") {
 		addrStr = addrStr[6:] // Remove "kalon1" prefix
 	}
-	
+
 	// Try to decode as hex
 	if len(addrStr) == 40 { // 20 bytes = 40 hex chars
 		bytes, err := hex.DecodeString(addrStr)
@@ -45,7 +45,7 @@ func ParseAddress(addrStr string) (Address, error) {
 			return addr, nil
 		}
 	}
-	
+
 	// Fallback to hash-based conversion
 	return AddressFromString(addrStr), nil
 }
