@@ -96,7 +96,9 @@ func (us *UTXOSet) RemoveUTXOs(blockHash Hash) {
 
 // getKey creates a unique key for a UTXO
 func (us *UTXOSet) getKey(txHash Hash, index uint32) string {
-	return string(txHash[:]) + ":" + string(binary.BigEndian.AppendUint32(nil, index))
+	indexBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(indexBytes, index)
+	return string(txHash[:]) + ":" + string(indexBytes)
 }
 
 // CalculateTransactionHash calculates the hash of a transaction
