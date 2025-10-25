@@ -436,15 +436,24 @@ func (s *ServerV2) handleGetBalance(req *RPCRequest) *RPCResponse {
 	}
 
 	// Convert string address to Address type
-	var address core.Address
-	if len(addressStr) > 0 {
-		// For now, we'll use a simple conversion
-		// In a real implementation, you'd parse the bech32 address
-		copy(address[:], []byte(addressStr)[:32])
+	address, err := core.ParseAddress(addressStr)
+	if err != nil {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid address format",
+				Data:    err.Error(),
+			},
+			ID: req.ID,
+		}
 	}
 
 	// Get balance from blockchain
 	balance := s.blockchain.GetBalance(address)
+
+	// Debug logging
+	log.Printf("🔍 Balance query - Address: %s, Parsed: %x, Balance: %d", addressStr, address, balance)
 
 	return &RPCResponse{
 		JSONRPC: "2.0",

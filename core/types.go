@@ -3,6 +3,8 @@ package core
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
+	"strings"
 	"time"
 )
 
@@ -11,6 +13,42 @@ type Hash [32]byte
 
 // Address represents a 20-byte address
 type Address [20]byte
+
+// AddressFromString converts a bech32 address string to Address
+func AddressFromString(addrStr string) Address {
+	// For now, we'll use a simple hash-based conversion
+	// In a real implementation, you'd decode the bech32 address
+	hash := sha256.Sum256([]byte(addrStr))
+	var addr Address
+	copy(addr[:], hash[:20])
+	return addr
+}
+
+// String returns the string representation of an address
+func (a Address) String() string {
+	return hex.EncodeToString(a[:])
+}
+
+// ParseAddress parses an address from various formats
+func ParseAddress(addrStr string) (Address, error) {
+	// Remove any prefix if present
+	if strings.HasPrefix(addrStr, "kalon1") {
+		addrStr = addrStr[6:] // Remove "kalon1" prefix
+	}
+	
+	// Try to decode as hex
+	if len(addrStr) == 40 { // 20 bytes = 40 hex chars
+		bytes, err := hex.DecodeString(addrStr)
+		if err == nil && len(bytes) == 20 {
+			var addr Address
+			copy(addr[:], bytes)
+			return addr, nil
+		}
+	}
+	
+	// Fallback to hash-based conversion
+	return AddressFromString(addrStr), nil
+}
 
 // BlockHeader represents the header of a block
 type BlockHeader struct {
@@ -158,10 +196,6 @@ func (h Hash) String() string {
 
 func (h Hash) Bytes() []byte {
 	return h[:]
-}
-
-func (a Address) String() string {
-	return string(a[:])
 }
 
 func (a Address) Bytes() []byte {
