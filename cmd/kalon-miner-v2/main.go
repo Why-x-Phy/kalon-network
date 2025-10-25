@@ -181,7 +181,7 @@ func (m *MinerV2) mineBlock(workerID int) {
 	// Mine the block
 	startTime := time.Now()
 	nonce := uint64(0)
-	target := uint64(1) << (256 - block.Header.Difficulty)
+	target := uint64(1) << (64 - block.Header.Difficulty) // Use 64-bit target, not 256-bit
 
 	for {
 		select {
