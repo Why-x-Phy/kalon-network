@@ -2,7 +2,6 @@ package rpc
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -374,22 +373,22 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 			if txMap, ok := txData.(map[string]interface{}); ok {
 				// Parse transaction from map
 				tx := core.Transaction{}
-				
+
 				// Parse From address
 				if fromStr, ok := txMap["from"].(string); ok {
 					tx.From = core.AddressFromString(fromStr)
 				}
-				
+
 				// Parse To address
 				if toStr, ok := txMap["to"].(string); ok {
 					tx.To = core.AddressFromString(toStr)
 				}
-				
+
 				// Parse Amount
 				if amount, ok := txMap["amount"].(float64); ok {
 					tx.Amount = uint64(amount)
 				}
-				
+
 				// Parse other fields
 				if nonce, ok := txMap["nonce"].(float64); ok {
 					tx.Nonce = uint64(nonce)
@@ -414,7 +413,7 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 						copy(tx.Hash[:], hashBytes)
 					}
 				}
-				
+
 				// Parse UTXO fields
 				if inputs, ok := txMap["inputs"].([]interface{}); ok {
 					for _, inputData := range inputs {
@@ -435,7 +434,7 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 						}
 					}
 				}
-				
+
 				if outputs, ok := txMap["outputs"].([]interface{}); ok {
 					for _, outputData := range outputs {
 						if outputMap, ok := outputData.(map[string]interface{}); ok {
@@ -450,14 +449,14 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 						}
 					}
 				}
-				
+
 				// Parse timestamp
 				if timestamp, ok := txMap["timestamp"].(string); ok {
 					if t, err := time.Parse(time.RFC3339, timestamp); err == nil {
 						tx.Timestamp = t
 					}
 				}
-				
+
 				transactions = append(transactions, tx)
 				log.Printf("💰 Parsed transaction with %d outputs, total amount: %d", len(tx.Outputs), tx.Amount)
 			}
@@ -465,7 +464,7 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 	} else {
 		log.Printf("⚠️ DEBUG: No transactions found in block data!")
 	}
-	
+
 	log.Printf("🔍 DEBUG: Total transactions parsed: %d", len(transactions))
 
 	// Create block with transactions

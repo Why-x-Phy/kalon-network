@@ -20,7 +20,7 @@ func AddressFromString(addrStr string) Address {
 	if strings.HasPrefix(addrStr, "kalon1") {
 		addrStr = addrStr[6:] // Remove "kalon1" prefix
 	}
-	
+
 	// Try to decode as hex
 	if len(addrStr) == 40 { // 20 bytes = 40 hex chars
 		bytes, err := hex.DecodeString(addrStr)
@@ -30,7 +30,7 @@ func AddressFromString(addrStr string) Address {
 			return addr
 		}
 	}
-	
+
 	// Fallback: hash the string and take first 20 bytes
 	hash := sha256.Sum256([]byte(addrStr))
 	var addr2 Address
