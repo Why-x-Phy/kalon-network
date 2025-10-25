@@ -369,7 +369,9 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 
 	// Parse transactions from block data
 	var transactions []core.Transaction
+	log.Printf("🔍 DEBUG: Parsing block data, checking for transactions...")
 	if txsData, ok := data["transactions"].([]interface{}); ok {
+		log.Printf("🔍 DEBUG: Found %d transactions in block data", len(txsData))
 		for _, txData := range txsData {
 			if txMap, ok := txData.(map[string]interface{}); ok {
 				// Parse transaction from map
@@ -462,7 +464,11 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 				log.Printf("💰 Parsed transaction with %d outputs, total amount: %d", len(tx.Outputs), tx.Amount)
 			}
 		}
+	} else {
+		log.Printf("⚠️ DEBUG: No transactions found in block data!")
 	}
+	
+	log.Printf("🔍 DEBUG: Total transactions parsed: %d", len(transactions))
 
 	// Create block with transactions
 	block := &core.Block{
