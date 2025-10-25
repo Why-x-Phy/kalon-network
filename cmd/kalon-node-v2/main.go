@@ -132,6 +132,7 @@ func (n *NodeV2) loadGenesis() (*core.GenesisConfig, error) {
 	// For now, create a default genesis
 	// In a real implementation, this would load from file
 	return &core.GenesisConfig{
+		InitialBlockReward: 5.0, // 5 tKALON block reward
 		Difficulty: core.DifficultyConfig{
 			InitialDifficulty: 4,
 		},

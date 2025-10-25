@@ -357,22 +357,22 @@ func (rpc *RPCBlockchainV2) CreateNewBlock(miner core.Address, txs []core.Transa
 			if txMap, ok := txData.(map[string]interface{}); ok {
 				// Parse transaction from map
 				tx := core.Transaction{}
-				
+
 				// Parse From address
 				if fromStr, ok := txMap["from"].(string); ok {
 					tx.From = core.AddressFromString(fromStr)
 				}
-				
+
 				// Parse To address
 				if toStr, ok := txMap["to"].(string); ok {
 					tx.To = core.AddressFromString(toStr)
 				}
-				
+
 				// Parse Amount
 				if amount, ok := txMap["amount"].(float64); ok {
 					tx.Amount = uint64(amount)
 				}
-				
+
 				// Parse other fields
 				if nonce, ok := txMap["nonce"].(float64); ok {
 					tx.Nonce = uint64(nonce)
@@ -397,7 +397,7 @@ func (rpc *RPCBlockchainV2) CreateNewBlock(miner core.Address, txs []core.Transa
 						copy(tx.Hash[:], hashBytes)
 					}
 				}
-				
+
 				// Parse UTXO fields
 				if inputs, ok := txMap["inputs"].([]interface{}); ok {
 					for _, inputData := range inputs {
@@ -418,7 +418,7 @@ func (rpc *RPCBlockchainV2) CreateNewBlock(miner core.Address, txs []core.Transa
 						}
 					}
 				}
-				
+
 				if outputs, ok := txMap["outputs"].([]interface{}); ok {
 					for _, outputData := range outputs {
 						if outputMap, ok := outputData.(map[string]interface{}); ok {
@@ -433,14 +433,14 @@ func (rpc *RPCBlockchainV2) CreateNewBlock(miner core.Address, txs []core.Transa
 						}
 					}
 				}
-				
+
 				// Parse timestamp
 				if timestamp, ok := txMap["timestamp"].(string); ok {
 					if t, err := time.Parse(time.RFC3339, timestamp); err == nil {
 						tx.Timestamp = t
 					}
 				}
-				
+
 				blockTxs = append(blockTxs, tx)
 				log.Printf("💰 Loaded transaction with %d outputs, total amount: %d", len(tx.Outputs), tx.Amount)
 			}
