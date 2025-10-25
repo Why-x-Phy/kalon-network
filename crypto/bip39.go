@@ -150,7 +150,9 @@ func NewWallet(passphrase string) (*Wallet, error) {
 
 // GetAddressString returns the address as a bech32 string
 func (w *Wallet) GetAddressString() (string, error) {
-	return AddressToBech32(w.Address, "kalon")
+	// Use simple hex encoding with kalon1 prefix for now
+	addressHex := hex.EncodeToString(w.Address[:])
+	return "kalon1" + addressHex, nil
 }
 
 // GetAddress returns the wallet address
