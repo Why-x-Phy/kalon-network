@@ -21,8 +21,12 @@ func AddressFromString(addrStr string) Address {
 		addrStr = addrStr[6:] // Remove "kalon1" prefix
 	}
 
-	// Try to decode as hex
-	if len(addrStr) == 40 { // 20 bytes = 40 hex chars
+	// Try to decode as hex (handle both 39 and 40 character addresses)
+	if len(addrStr) >= 39 { // 20 bytes = 40 hex chars, but allow 39 for now
+		// Pad with 0 if needed
+		if len(addrStr) == 39 {
+			addrStr = "0" + addrStr
+		}
 		bytes, err := hex.DecodeString(addrStr)
 		if err == nil && len(bytes) == 20 {
 			var addr Address
