@@ -33,9 +33,9 @@ func AddressFromString(addrStr string) Address {
 	
 	// Fallback: hash the string and take first 20 bytes
 	hash := sha256.Sum256([]byte(addrStr))
-	var addr Address
-	copy(addr[:], hash[:20])
-	return addr
+	var addr2 Address
+	copy(addr2[:], hash[:20])
+	return addr2
 }
 
 // String returns the string representation of an address
