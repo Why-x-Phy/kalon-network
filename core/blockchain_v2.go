@@ -84,8 +84,8 @@ func NewStateManager() *StateManager {
 // NewConsensusV2 creates a new consensus mechanism
 func NewConsensusV2() *ConsensusV2 {
 	return &ConsensusV2{
-		difficulty: 4,
-		target:     1 << (64 - 4), // 4 difficulty = 2^60 target
+		difficulty: 1, // Use initial difficulty from genesis config
+		target:     1 << (64 - 1), // 1 difficulty = 2^63 target
 		blockTime:  30 * time.Second,
 		adjustment: NewDifficultyAdjustment(),
 	}
@@ -284,7 +284,7 @@ func (c *ConsensusV2) CalculateDifficultyV2(blockNumber uint64, parent *Block) u
 
 	// For first few blocks, use initial difficulty
 	if blockNumber <= 10 {
-		return 4
+		return 1 // Use initial difficulty from genesis config
 	}
 
 	// Use LWMA algorithm
