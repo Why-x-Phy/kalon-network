@@ -203,10 +203,8 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 		}
 	}
 
-	// Parse miner address
-	var miner core.Address
-	hash := sha256.Sum256([]byte(minerStr))
-	copy(miner[:], hash[:20])
+	// Parse miner address using proper address parsing
+	miner := core.AddressFromString(minerStr)
 
 	// Get current blockchain state
 	bestBlock := s.blockchain.GetBestBlock()
