@@ -178,6 +178,11 @@ func (bc *BlockchainV2) processTransactionUTXOs(tx *Transaction, blockHash Hash)
 	}
 }
 
+// AddBlockV2 is the main function for adding blocks - ensures UTXO processing
+func (bc *BlockchainV2) AddBlockV2(block *Block) error {
+	return bc.addBlockV2(block)
+}
+
 // GetBalance returns the balance for an address
 func (bc *BlockchainV2) GetBalance(address Address) uint64 {
 	return bc.utxoSet.GetBalance(address)
