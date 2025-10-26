@@ -3,8 +3,6 @@ package core
 import (
 	"crypto/sha256"
 	"encoding/binary"
-	"encoding/hex"
-	"log"
 	"sync"
 )
 
@@ -46,9 +44,6 @@ func (us *UTXOSet) AddUTXO(txHash Hash, index uint32, amount uint64, address Add
 		BlockHash: blockHash,
 	}
 	us.utxos[key] = utxo
-	
-	// Debug log
-	log.Printf("✅ AddUTXO - Address: %s, Amount: %d", hex.EncodeToString(address[:]), amount)
 }
 
 // SpendUTXO marks a UTXO as spent
@@ -81,27 +76,11 @@ func (us *UTXOSet) GetUTXOs(address Address) []*UTXO {
 
 // GetBalance calculates the total balance for an address
 func (us *UTXOSet) GetBalance(address Address) uint64 {
-	us.mu.RLock()
-	defer us.mu.RUnlock()
-	
-	queryAddrStr := hex.EncodeToString(address[:])
-	log.Printf("🔍 GetBalance query - Address: %s", queryAddrStr)
-	
+	utxos := us.GetUTXOs(address)
 	var balance uint64
-	foundCount := 0
-	for _, utxo := range us.utxos {
-		utxoAddrStr := hex.EncodeToString(utxo.Address[:])
-		log.Printf("🔍 Comparing - Query: %s, UTXO: %s", queryAddrStr, utxoAddrStr)
-		if !utxo.Spent {
-			// Direct comparison
-			if utxo.Address == address {
-				balance += utxo.Amount
-				foundCount++
-				log.Printf("✅ Match! Balance += %d (total: %d)", utxo.Amount, balance)
-			}
-		}
+	for _, utxo := range utxos {
+		balance += utxo.Amount
 	}
-	log.Printf("🔍 GetBalance result: %d (found %d UTXOs)", balance, foundCount)
 	return balance
 }
 
