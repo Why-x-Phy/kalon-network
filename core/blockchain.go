@@ -174,7 +174,7 @@ func (bc *BlockchainV2) processTransactionUTXOs(tx *Transaction, blockHash Hash)
 	// Create new UTXOs for outputs
 	for i, output := range tx.Outputs {
 		bc.utxoSet.AddUTXO(tx.Hash, uint32(i), output.Amount, output.Address, blockHash)
-		log.Printf("💰 UTXO created - Address: %x, Amount: %d, TxHash: %x", output.Address, output.Amount, tx.Hash)
+		log.Printf("💰 UTXO created - Address: %s, Amount: %d, TxHash: %x", hex.EncodeToString(output.Address[:]), output.Amount, tx.Hash)
 	}
 }
 

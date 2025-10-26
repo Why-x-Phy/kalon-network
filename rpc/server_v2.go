@@ -501,8 +501,12 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 							if addressValue, ok := outputMap["address"]; ok {
 								// Parse address from various formats
 								if addressStr, ok := addressValue.(string); ok {
-									// If it's 40 hex chars, decode directly
-									if len(addressStr) == 40 {
+									// First check if it's 20 bytes directly
+									if len(addressStr) == 20 {
+										copy(output.Address[:], []byte(addressStr))
+										log.Printf("✅ Parsed 20-byte address: %x", output.Address)
+									} else if len(addressStr) == 40 {
+										// If it's 40 hex chars, decode directly
 										if decoded, err := hex.DecodeString(addressStr); err == nil && len(decoded) == 20 {
 											copy(output.Address[:], decoded)
 											log.Printf("✅ Parsed hex address: %s -> %x", addressStr[:20]+"...", output.Address)
