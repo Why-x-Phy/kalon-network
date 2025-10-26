@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/kalon-network/kalon/core"
-	"github.com/kalon-network/kalon/crypto"
 )
 
 // ServerV2 represents a professional RPC server
@@ -204,29 +203,40 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 		}
 	}
 
-	// Parse miner address - handle Bech32 and hex properly
+	// Parse miner address - handle kalon1 + hex format
 	var miner core.Address
 	
 	if strings.HasPrefix(minerStr, "kalon1") {
-		// Bech32 address - decode it properly using crypto package
-		decodedBytes, err := crypto.DecodeBech32(minerStr)
-		if err == nil && len(decodedBytes) == 20 {
-			copy(miner[:], decodedBytes)
-			log.Printf("✅ Parsed Bech32 successfully")
+		// Remove "kalon1" prefix and decode hex
+		hexStr := strings.TrimPrefix(minerStr, "kalon1")
+		if len(hexStr) == 40 {
+			// Decode 40-char hex to 20 bytes
+			decodedBytes, err := hex.DecodeString(hexStr)
+			if err == nil && len(decodedBytes) == 20 {
+				copy(miner[:], decodedBytes)
+				log.Printf("✅ Parsed kalon1+hex address successfully")
+			} else {
+				log.Printf("❌ Failed to decode kalon1+hex: %v", err)
+				return &RPCResponse{
+					JSONRPC: "2.0",
+					Error: &RPCError{Code: -32602, Message: "Invalid miner address"},
+					ID: req.ID,
+				}
+			}
 		} else {
-			log.Printf("❌ Failed to decode Bech32, trying fallback")
+			// Not a valid hex after kalon1
+			log.Printf("❌ Invalid: kalon1 address has wrong length: %d", len(hexStr))
 			return &RPCResponse{
 				JSONRPC: "2.0",
-				Error: &RPCError{Code: -32602, Message: "Invalid miner address"},
+				Error: &RPCError{Code: -32602, Message: "Invalid miner address format"},
 				ID: req.ID,
 			}
 		}
 	} else {
-		// Not Bech32 - must be hex
-		log.Printf("❌ Invalid: not Bech32 and not 40-char hex")
+		log.Printf("❌ Invalid: address must start with kalon1")
 		return &RPCResponse{
 			JSONRPC: "2.0",
-			Error: &RPCError{Code: -32602, Message: "Miner must be Bech32"},
+			Error: &RPCError{Code: -32602, Message: "Miner must start with kalon1"},
 			ID: req.ID,
 		}
 	}
