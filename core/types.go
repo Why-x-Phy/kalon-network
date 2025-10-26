@@ -45,24 +45,16 @@ func ParseAddress(addrStr string) (Address, error) {
 	return out, errors.New("unsupported address format")
 }
 
-// AddressFromString parses Bech32 and hex addresses
+// AddressFromString parses Bech32 and hex addresses  
 func AddressFromString(s string) Address {
 	var out Address
+	s = strings.TrimSpace(s)
 	
-	// Bech32 with "kalon1" prefix
+	// Bech32 with "kalon1" prefix - can't decode here due to import cycle
+	// Will be handled in rpc/server_v2.go with proper Bech32 decoding
 	if strings.HasPrefix(s, "kalon1") {
-		// Remove prefix and decode
-		decoded := s[6:]
-		if len(decoded) == 0 {
-			return out
-		}
-		
-		// Try to decode as hex after removing prefix
-		if len(decoded) <= 40 {
-			// This is a simplified approach - actual Bech32 decode would require crypto package
-			// For now, treat as hex without prefix
-			// This is a temporary workaround
-		}
+		// Return zero to force caller to handle Bech32 decoding
+		return out
 	}
 	
 	// Remove "0x" prefix if present
