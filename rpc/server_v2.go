@@ -233,11 +233,27 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 			}
 		}
 	} else {
-		log.Printf("❌ Invalid: address must start with kalon1")
-		return &RPCResponse{
-			JSONRPC: "2.0",
-			Error: &RPCError{Code: -32602, Message: "Miner must start with kalon1"},
-			ID: req.ID,
+		// Try to parse as plain 40-char hex
+		if len(minerStr) == 40 {
+			decodedBytes, err := hex.DecodeString(minerStr)
+			if err == nil && len(decodedBytes) == 20 {
+				copy(miner[:], decodedBytes)
+				log.Printf("✅ Parsed plain 40-char hex address")
+			} else {
+				log.Printf("❌ Invalid address format: %s", minerStr)
+				return &RPCResponse{
+					JSONRPC: "2.0",
+					Error: &RPCError{Code: -32602, Message: "Invalid miner address format"},
+					ID: req.ID,
+				}
+			}
+		} else {
+			log.Printf("❌ Invalid address format: %s (len=%d)", minerStr, len(minerStr))
+			return &RPCResponse{
+				JSONRPC: "2.0",
+				Error: &RPCError{Code: -32602, Message: "Invalid miner address format"},
+				ID: req.ID,
+			}
 		}
 	}
 	log.Printf("🔍 Miner address bytes: %x", miner)
