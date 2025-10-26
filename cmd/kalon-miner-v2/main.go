@@ -424,7 +424,11 @@ func (rpc *RPCBlockchainV2) CreateNewBlock(miner core.Address, txs []core.Transa
 						if outputMap, ok := outputData.(map[string]interface{}); ok {
 							output := core.TxOutput{}
 							if addressStr, ok := outputMap["address"].(string); ok {
-								output.Address = core.AddressFromString(addressStr)
+								// CRITICAL: Decode hex directly, don't use AddressFromString!
+								if addressBytes, err := hex.DecodeString(addressStr); err == nil && len(addressBytes) == 20 {
+									copy(output.Address[:], addressBytes)
+									log.Printf("🔍 Miner: Parsed output address: %s -> %x", addressStr, output.Address)
+								}
 							}
 							if amount, ok := outputMap["amount"].(float64); ok {
 								output.Amount = uint64(amount)
@@ -486,7 +490,7 @@ func (rpc *RPCBlockchainV2) AddBlock(block *core.Block) error {
 				"amount":  float64(output.Amount),
 			})
 		}
-		
+
 		txMap := map[string]interface{}{
 			"from":      tx.From.String(),
 			"to":        tx.To.String(),
