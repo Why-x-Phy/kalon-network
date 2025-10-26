@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"sync"
