@@ -1,6 +1,9 @@
 #!/bin/bash
 # Clean git and rebuild
 
+# Set permissions
+chmod +x "$0"
+
 cd ~/kalon-network
 
 # Reset to latest commit
