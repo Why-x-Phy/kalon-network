@@ -12,11 +12,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/kalon-network/kalon/core"
+	"github.com/kalon-network/kalon/crypto"
 )
 
 // MinerV2 represents a professional miner
@@ -486,7 +488,7 @@ func (rpc *RPCBlockchainV2) AddBlock(block *core.Block) error {
 		var outputs []map[string]interface{}
 		for _, output := range tx.Outputs {
 			outputs = append(outputs, map[string]interface{}{
-				"address": output.Address.String(), // CRITICAL: Use String() method
+				"address": output.Address[:], // Send as bytes, not hex-encoded string!
 				"amount":  float64(output.Amount),
 			})
 		}
@@ -562,6 +564,17 @@ func (rpc *RPCBlockchainV2) callRPC(req RPCRequest) (*RPCResponse, error) {
 
 // parseAddress parses a wallet address
 func (m *MinerV2) parseAddress(address string) (core.Address, error) {
+	// If it's a Bech32 address (starts with kalon1), decode it
+	if strings.HasPrefix(address, "kalon1") {
+		decodedBytes, err := crypto.DecodeBech32(address)
+		if err == nil && len(decodedBytes) == 20 {
+			var addr core.Address
+			copy(addr[:], decodedBytes)
+			log.Printf("✅ Parsed Bech32 address: %s -> %x", address, addr)
+			return addr, nil
+		}
+	}
+	
 	// Try to decode as hex first
 	if len(address) == 40 {
 		bytes, err := hex.DecodeString(address)

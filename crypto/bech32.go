@@ -268,3 +268,10 @@ func AddressFromHex(hexStr string) ([20]byte, error) {
 func AddressToHex(address [20]byte) string {
 	return "0x" + hex.EncodeToString(address[:])
 }
+
+// DecodeBech32 decodes a bech32 string to bytes (for use in miner)
+func DecodeBech32(bech32Str string) ([]byte, error) {
+	encoder := NewBech32Encoder()
+	_, data, err := encoder.Decode(bech32Str)
+	return data, err
+}
