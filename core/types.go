@@ -141,8 +141,16 @@ func (o *TxOutput) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	// Parse address string to Address type
-	o.Address = AddressFromString(aux.Address)
+	// Parse address string - if it's 40 hex chars, decode directly
+	if len(aux.Address) == 40 {
+		if decoded, err := hex.DecodeString(aux.Address); err == nil && len(decoded) == 20 {
+			copy(o.Address[:], decoded)
+		} else {
+			o.Address = AddressFromString(aux.Address)
+		}
+	} else {
+		o.Address = AddressFromString(aux.Address)
+	}
 	o.Amount = aux.Amount
 	return nil
 }
