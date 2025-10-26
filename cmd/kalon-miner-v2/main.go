@@ -487,9 +487,9 @@ func (rpc *RPCBlockchainV2) AddBlock(block *core.Block) error {
 		// Convert outputs to JSON format with explicit address strings
 		var outputs []map[string]interface{}
 		for _, output := range tx.Outputs {
-			// Address als 20-byte Array senden, NICHT als hex-string!
+			// Address als hex-string senden (direkt, NICHT nochmal encodieren!)
 			outputs = append(outputs, map[string]interface{}{
-				"address": output.Address[:],
+				"address": output.Address.String(), // String() macht hex.EncodeToString
 				"amount":  float64(output.Amount),
 			})
 		}
