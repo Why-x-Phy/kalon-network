@@ -451,10 +451,19 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 								// Address can be string OR bytes
 								var addressBytes []byte
 								if addressStr, ok := addressValue.(string); ok {
+									log.Printf("🔍 DEBUG - Address string: %s (len=%d)", addressStr, len(addressStr))
 									// Try to decode as hex string
-									if decoded, err := hex.DecodeString(addressStr); err == nil && len(decoded) == 20 {
-										addressBytes = decoded
-										log.Printf("🔍 DEBUG - Parsed hex address: %s", addressStr)
+									decoded, err := hex.DecodeString(addressStr)
+									if err == nil {
+										log.Printf("🔍 DEBUG - Decoded hex: len=%d, bytes=%x", len(decoded), decoded)
+										// If decoded is 32 bytes (Hash), take first 20 bytes (Address)
+										if len(decoded) == 32 {
+											addressBytes = decoded[:20]
+											log.Printf("🔍 DEBUG - Using first 20 bytes of hash: %x", addressBytes)
+										} else if len(decoded) == 20 {
+											addressBytes = decoded
+											log.Printf("🔍 DEBUG - Perfect 20-byte address: %x", addressBytes)
+										}
 									} else {
 										// Use AddressFromString for kalon1 format
 										addr := core.AddressFromString(addressStr)
@@ -466,8 +475,9 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 									log.Printf("🔍 DEBUG - Got bytes address: %x", addressBytes)
 								}
 								
-								if len(addressBytes) == 20 {
-									copy(output.Address[:], addressBytes)
+								if len(addressBytes) >= 20 {
+									copy(output.Address[:], addressBytes[:20])
+									log.Printf("🔍 DEBUG - Final output address: %x", output.Address)
 								}
 							}
 							if amount, ok := outputMap["amount"].(float64); ok {
