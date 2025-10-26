@@ -627,24 +627,13 @@ func (s *ServerV2) handleGetBalance(req *RPCRequest) *RPCResponse {
 	}
 
 	// Convert string address to Address type
-	address, err := core.ParseAddress(addressStr)
-	if err != nil {
-		return &RPCResponse{
-			JSONRPC: "2.0",
-			Error: &RPCError{
-				Code:    -32602,
-				Message: "Invalid address format",
-				Data:    err.Error(),
-			},
-			ID: req.ID,
-		}
-	}
+	address := core.AddressFromString(addressStr)
 
 	// Get balance from blockchain
 	balance := s.blockchain.GetBalance(address)
 
 	// Debug logging
-	log.Printf("🔍 Balance query - Address: %s, Parsed: %x, Balance: %d", addressStr, address, balance)
+	log.Printf("🔍 Balance query - Address: %s, Parsed: %s, Balance: %d", addressStr, hex.EncodeToString(address[:]), balance)
 
 	return &RPCResponse{
 		JSONRPC: "2.0",
