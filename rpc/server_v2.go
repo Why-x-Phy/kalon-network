@@ -204,33 +204,33 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 		}
 	}
 
-	// Parse miner address - handle Bech32, hex, and fallback
+	// Parse miner address - handle Bech32 and hex properly
 	var miner core.Address
+	
 	if strings.HasPrefix(minerStr, "kalon1") {
-		// Bech32 address - decode it properly
+		// Bech32 address - decode it properly using crypto package
 		decodedBytes, err := crypto.DecodeBech32(minerStr)
 		if err == nil && len(decodedBytes) == 20 {
 			copy(miner[:], decodedBytes)
-			log.Printf("✅ Parsed Bech32: %s -> %x", minerStr[:20]+"...", miner)
+			log.Printf("✅ Parsed Bech32 successfully")
 		} else {
-			log.Printf("⚠️ Failed to decode Bech32")
-			miner = core.AddressFromString(minerStr)
-		}
-	} else if len(minerStr) == 40 {
-		// 40-char hex string - decode directly to bytes
-		if decoded, err := hex.DecodeString(minerStr); err == nil && len(decoded) == 20 {
-			copy(miner[:], decoded)
-			log.Printf("✅ Parsed 40-char hex: %s... -> %x", minerStr[:10], miner)
-		} else {
-			log.Printf("⚠️ Failed to decode 40-char hex")
-			miner = core.AddressFromString(minerStr)
+			log.Printf("❌ Failed to decode Bech32, trying fallback")
+			return &RPCResponse{
+				JSONRPC: "2.0",
+				Error: &RPCError{Code: -32602, Message: "Invalid miner address"},
+				ID: req.ID,
+			}
 		}
 	} else {
-		// Other format - use AddressFromString
-		miner = core.AddressFromString(minerStr)
-		log.Printf("ℹ️ Used AddressFromString: %s", minerStr)
+		// Not Bech32 - must be hex
+		log.Printf("❌ Invalid: not Bech32 and not 40-char hex")
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{Code: -32602, Message: "Miner must be Bech32"},
+			ID: req.ID,
+		}
 	}
-	log.Printf("🔍 Final miner address: %x", miner)
+	log.Printf("🔍 Miner address bytes: %x", miner)
 
 	// Get current blockchain state
 	bestBlock := s.blockchain.GetBestBlock()
