@@ -478,6 +478,15 @@ func (rpc *RPCBlockchainV2) AddBlock(block *core.Block) error {
 	// Convert transactions to JSON format
 	var transactions []map[string]interface{}
 	for _, tx := range block.Txs {
+		// Convert outputs to JSON format with explicit address strings
+		var outputs []map[string]interface{}
+		for _, output := range tx.Outputs {
+			outputs = append(outputs, map[string]interface{}{
+				"address": output.Address.String(), // CRITICAL: Use String() method
+				"amount":  float64(output.Amount),
+			})
+		}
+		
 		txMap := map[string]interface{}{
 			"from":      tx.From.String(),
 			"to":        tx.To.String(),
@@ -490,7 +499,7 @@ func (rpc *RPCBlockchainV2) AddBlock(block *core.Block) error {
 			"signature": tx.Signature,
 			"hash":      hex.EncodeToString(tx.Hash[:]),
 			"inputs":    tx.Inputs,
-			"outputs":   tx.Outputs,
+			"outputs":   outputs, // CRITICAL: Use manually constructed outputs
 			"timestamp": tx.Timestamp.Format(time.RFC3339),
 		}
 		transactions = append(transactions, txMap)
