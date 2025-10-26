@@ -138,12 +138,12 @@ func (o *TxOutput) UnmarshalJSON(data []byte) error {
 	type Alias TxOutput
 	aux := &struct {
 		Address string `json:"address"`
-		Amount  uint64  `json:"amount"`
+		Amount  uint64 `json:"amount"`
 	}{}
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
-	
+
 	// Parse address string to Address type
 	o.Address = AddressFromString(aux.Address)
 	o.Amount = aux.Amount

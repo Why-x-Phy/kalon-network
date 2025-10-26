@@ -315,7 +315,7 @@ func (bc *BlockchainV2) calculateBlockReward(blockNumber uint64) uint64 {
 // createBlockRewardTransaction creates a block reward transaction
 func (bc *BlockchainV2) createBlockRewardTransaction(miner Address, amount uint64) Transaction {
 	log.Printf("🔍 DEBUG createBlockRewardTransaction - Miner address: %x, Amount: %d", miner, amount)
-	
+
 	// Create a special coinbase transaction (no inputs, only output)
 	tx := Transaction{
 		From:      Address{}, // Empty for coinbase
