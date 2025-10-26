@@ -450,44 +450,24 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 						if outputMap, ok := outputData.(map[string]interface{}); ok {
 							output := core.TxOutput{}
 							if addressValue, ok := outputMap["address"]; ok {
-								// Address can be string OR bytes
-								var addressBytes []byte
+								// Parse address from various formats
 								if addressStr, ok := addressValue.(string); ok {
-									log.Printf("🔍 DEBUG - Address string: %s (len=%d)", addressStr, len(addressStr))
-									// Try to decode as hex string DIRECTLY
-									decoded, err := hex.DecodeString(addressStr)
-									if err == nil {
-										log.Printf("🔍 DEBUG - Decoded hex: len=%d, bytes=%x", len(decoded), decoded)
-										// If decoded is 32 bytes (Hash), take first 20 bytes (Address)
-										if len(decoded) == 32 {
-											addressBytes = decoded[:20]
-											log.Printf("🔍 DEBUG - Using first 20 bytes of hash: %x", addressBytes)
-										} else if len(decoded) == 20 {
-											addressBytes = decoded
-											log.Printf("🔍 DEBUG - Perfect 20-byte address: %x", addressBytes)
+									// If it's 40 hex chars, decode directly
+									if len(addressStr) == 40 {
+										if decoded, err := hex.DecodeString(addressStr); err == nil && len(decoded) == 20 {
+											copy(output.Address[:], decoded)
+											log.Printf("✅ Parsed 20-byte address: %x", output.Address)
 										} else {
-											// Wrong length, try AddressFromString
-											addr := core.AddressFromString(addressStr)
-											addressBytes = addr[:]
-											log.Printf("🔍 DEBUG - Used AddressFromString: %s -> %x", addressStr, addressBytes)
+											log.Printf("⚠️ Failed to decode 40-char address: %s", addressStr)
 										}
 									} else {
-										// Decoding failed, use AddressFromString
-										addr := core.AddressFromString(addressStr)
-										addressBytes = addr[:]
-										log.Printf("🔍 DEBUG - Hex decode failed, used AddressFromString: %s -> %x", addressStr, addressBytes)
+										// Use AddressFromString for other formats
+										output.Address = core.AddressFromString(addressStr)
+										log.Printf("✅ Used AddressFromString: %s -> %x", addressStr, output.Address)
 									}
-								} else if addressBytesRaw, ok := addressValue.([]byte); ok {
-									addressBytes = addressBytesRaw
-									log.Printf("🔍 DEBUG - Got bytes address: %x", addressBytes)
-								}
-
-								if len(addressBytes) >= 20 {
-									copy(output.Address[:], addressBytes[:20])
-									log.Printf("🔍 DEBUG - Final output address (before): %x", addressBytes)
-									log.Printf("🔍 DEBUG - Final output address (after copy): %x", output.Address)
-								} else {
-									log.Printf("⚠️ WARNING - addressBytes length is %d, expected 20!", len(addressBytes))
+								} else if addressBytes, ok := addressValue.([]byte); ok && len(addressBytes) == 20 {
+									copy(output.Address[:], addressBytes)
+									log.Printf("✅ Parsed bytes address: %x", output.Address)
 								}
 							}
 							if amount, ok := outputMap["amount"].(float64); ok {
