@@ -204,7 +204,9 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 
 	// Parse miner address using proper address parsing
 	miner := core.AddressFromString(minerStr)
-	log.Printf("🔍 DEBUG - Miner string: %s, Parsed address: %x", minerStr, miner)
+	log.Printf("🔍 DEBUG - Miner string: %s", minerStr)
+	log.Printf("🔍 DEBUG - Parsed address: %x", miner)
+	log.Printf("🔍 DEBUG - Parsed address string: %s", hex.EncodeToString(miner[:]))
 
 	// Get current blockchain state
 	bestBlock := s.blockchain.GetBestBlock()
