@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -28,14 +29,14 @@ func AddressFromString(addrStr string) Address {
 		if err == nil && len(bytes) == 20 {
 			var addr Address
 			copy(addr[:], bytes)
-			log.Printf("✅ AddressFromString: Successfully decoded %s -> %x", addrStr[:20]+"...", addr[:])
+			fmt.Printf("✅ AddressFromString: Successfully decoded %s -> %x\n", addrStr[:20]+"...", addr[:])
 			return addr
 		}
-		log.Printf("⚠️ AddressFromString: Failed to decode hex %s: %v", addrStr[:20]+"...", err)
+		fmt.Printf("⚠️ AddressFromString: Failed to decode hex %s: %v\n", addrStr[:20]+"...", err)
 	}
 
 	// NO FALLBACK! Return zero address if decoding fails
-	log.Printf("❌ AddressFromString: Invalid address format %s (len=%d)", addrStr, len(addrStr))
+	fmt.Printf("❌ AddressFromString: Invalid address format %s (len=%d)\n", addrStr, len(addrStr))
 	return Address{}
 }
 
