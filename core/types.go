@@ -15,32 +15,28 @@ type Hash [32]byte
 // Address represents a 20-byte address
 type Address [20]byte
 
-// AddressFromString converts a bech32 address string to Address
+// AddressFromString converts a hex address string to Address (NO FALLBACK)
 func AddressFromString(addrStr string) Address {
 	// Remove "kalon1" prefix if present
 	if strings.HasPrefix(addrStr, "kalon1") {
 		addrStr = addrStr[6:] // Remove "kalon1" prefix
 	}
 
-	// Try to decode as hex (handle both 39 and 40 character addresses)
-	if len(addrStr) >= 39 { // 20 bytes = 40 hex chars, but allow 39 for now
-		// Pad with 0 if needed
-		if len(addrStr) == 39 {
-			addrStr = "0" + addrStr
-		}
+	// Try to decode as hex - MUST be exactly 40 hex chars for 20 bytes
+	if len(addrStr) == 40 {
 		bytes, err := hex.DecodeString(addrStr)
 		if err == nil && len(bytes) == 20 {
 			var addr Address
 			copy(addr[:], bytes)
+			log.Printf("✅ AddressFromString: Successfully decoded %s -> %x", addrStr[:20]+"...", addr[:])
 			return addr
 		}
+		log.Printf("⚠️ AddressFromString: Failed to decode hex %s: %v", addrStr[:20]+"...", err)
 	}
 
-	// Fallback: hash the string and take first 20 bytes
-	hash := sha256.Sum256([]byte(addrStr))
-	var addr2 Address
-	copy(addr2[:], hash[:20])
-	return addr2
+	// NO FALLBACK! Return zero address if decoding fails
+	log.Printf("❌ AddressFromString: Invalid address format %s (len=%d)", addrStr, len(addrStr))
+	return Address{}
 }
 
 // String returns the string representation of an address
