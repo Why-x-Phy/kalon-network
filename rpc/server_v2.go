@@ -452,7 +452,7 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 								var addressBytes []byte
 								if addressStr, ok := addressValue.(string); ok {
 									log.Printf("🔍 DEBUG - Address string: %s (len=%d)", addressStr, len(addressStr))
-									// Try to decode as hex string
+									// Try to decode as hex string DIRECTLY
 									decoded, err := hex.DecodeString(addressStr)
 									if err == nil {
 										log.Printf("🔍 DEBUG - Decoded hex: len=%d, bytes=%x", len(decoded), decoded)
@@ -463,21 +463,29 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 										} else if len(decoded) == 20 {
 											addressBytes = decoded
 											log.Printf("🔍 DEBUG - Perfect 20-byte address: %x", addressBytes)
+										} else {
+											// Wrong length, try AddressFromString
+											addr := core.AddressFromString(addressStr)
+											addressBytes = addr[:]
+											log.Printf("🔍 DEBUG - Used AddressFromString: %s -> %x", addressStr, addressBytes)
 										}
 									} else {
-										// Use AddressFromString for kalon1 format
+										// Decoding failed, use AddressFromString
 										addr := core.AddressFromString(addressStr)
 										addressBytes = addr[:]
-										log.Printf("🔍 DEBUG - Parsed kalon1 address: %s -> %x", addressStr, addressBytes)
+										log.Printf("🔍 DEBUG - Hex decode failed, used AddressFromString: %s -> %x", addressStr, addressBytes)
 									}
 								} else if addressBytesRaw, ok := addressValue.([]byte); ok {
 									addressBytes = addressBytesRaw
 									log.Printf("🔍 DEBUG - Got bytes address: %x", addressBytes)
 								}
-								
+
 								if len(addressBytes) >= 20 {
 									copy(output.Address[:], addressBytes[:20])
-									log.Printf("🔍 DEBUG - Final output address: %x", output.Address)
+									log.Printf("🔍 DEBUG - Final output address (before): %x", addressBytes)
+									log.Printf("🔍 DEBUG - Final output address (after copy): %x", output.Address)
+								} else {
+									log.Printf("⚠️ WARNING - addressBytes length is %d, expected 20!", len(addressBytes))
 								}
 							}
 							if amount, ok := outputMap["amount"].(float64); ok {
