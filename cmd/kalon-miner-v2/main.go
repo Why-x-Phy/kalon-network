@@ -488,7 +488,7 @@ func (rpc *RPCBlockchainV2) AddBlock(block *core.Block) error {
 		var outputs []map[string]interface{}
 		for _, output := range tx.Outputs {
 			outputs = append(outputs, map[string]interface{}{
-				"address": output.Address[:], // Send as bytes, not hex-encoded string!
+				"address": hex.EncodeToString(output.Address[:]), // Send as hex string!
 				"amount":  float64(output.Amount),
 			})
 		}
@@ -574,7 +574,7 @@ func (m *MinerV2) parseAddress(address string) (core.Address, error) {
 			return addr, nil
 		}
 	}
-	
+
 	// Try to decode as hex first
 	if len(address) == 40 {
 		bytes, err := hex.DecodeString(address)
@@ -584,7 +584,7 @@ func (m *MinerV2) parseAddress(address string) (core.Address, error) {
 			return addr, nil
 		}
 	}
-	
+
 	// Fallback: create hash from string
 	hash := sha256.Sum256([]byte(address))
 	var addr core.Address
