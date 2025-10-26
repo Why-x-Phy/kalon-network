@@ -500,20 +500,24 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 							output := core.TxOutput{}
 							if addressValue, ok := outputMap["address"]; ok {
 								// Parse address from various formats
-								if addressStr, ok := addressValue.(string); ok {
-									// First check if it's 20 bytes directly
-									if len(addressStr) == 20 {
-										copy(output.Address[:], []byte(addressStr))
-										log.Printf("✅ Parsed 20-byte address: %x", output.Address)
-									} else if len(addressStr) == 40 {
-										// If it's 40 hex chars, decode directly
+								if addressBytes, ok := addressValue.([]interface{}); ok && len(addressBytes) == 20 {
+									// Address als Array von Bytes
+									var addrBytes []byte
+									for _, b := range addressBytes {
+										if byteVal, ok := b.(float64); ok {
+											addrBytes = append(addrBytes, byte(byteVal))
+										}
+									}
+									if len(addrBytes) == 20 {
+										copy(output.Address[:], addrBytes)
+										log.Printf("✅ Parsed array address: %x", output.Address)
+									}
+								} else if addressStr, ok := addressValue.(string); ok {
+									// If it's 40 hex chars, decode directly
+									if len(addressStr) == 40 {
 										if decoded, err := hex.DecodeString(addressStr); err == nil && len(decoded) == 20 {
 											copy(output.Address[:], decoded)
 											log.Printf("✅ Parsed hex address: %s -> %x", addressStr[:20]+"...", output.Address)
-										} else {
-											log.Printf("⚠️ Failed to decode hex: %s", addressStr)
-											// Fallback to AddressFromString
-											output.Address = core.AddressFromString(addressStr)
 										}
 									} else {
 										// Use AddressFromString for other formats (including Bech32)
