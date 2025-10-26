@@ -173,7 +173,7 @@ func (m *MinerV2) mineBlock(workerID int) {
 	}
 
 	// Create new block template with transactions from RPC server
-	block := m.blockchain.CreateNewBlock(miner, []core.Transaction{})
+	block := m.blockchain.CreateNewBlock(miner, []core.Transaction{}, m.config.Wallet)
 	if block == nil {
 		log.Printf("ÔØî Failed to create block template")
 		time.Sleep(1 * time.Second)
@@ -308,12 +308,12 @@ func (m *MinerV2) processEvent(event MiningEvent) {
 }
 
 // CreateNewBlock creates a new block template
-func (rpc *RPCBlockchainV2) CreateNewBlock(miner core.Address, txs []core.Transaction) *core.Block {
+func (rpc *RPCBlockchainV2) CreateNewBlock(miner core.Address, txs []core.Transaction, walletAddress string) *core.Block {
 	req := RPCRequest{
 		JSONRPC: "2.0",
 		Method:  "createBlockTemplate",
 		Params: map[string]interface{}{
-			"miner": miner.String(),
+			"miner": walletAddress, // Send original Bech32 address
 		},
 		ID: 2,
 	}
