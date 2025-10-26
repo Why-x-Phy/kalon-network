@@ -2,346 +2,311 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/kalon-network/kalon/core"
-	"github.com/kalon-network/kalon/crypto"
-	"github.com/kalon-network/kalon/mining"
 )
 
-// MinerConfig represents the miner configuration
+// MinerV2 represents a professional miner
+type MinerV2 struct {
+	config     *MinerConfig
+	blockchain *RPCBlockchainV2
+	running    bool
+	mu         sync.RWMutex
+	stats      *MiningStats
+	eventBus   chan MiningEvent
+	stopChan   chan struct{}
+	wg         sync.WaitGroup
+}
+
+// MinerConfig represents miner configuration
 type MinerConfig struct {
 	Wallet        string
 	Threads       int
 	RPCURL        string
-	LogLevel      string
-	Stats         bool
 	StatsInterval time.Duration
 }
 
-// MinerCLI represents the miner CLI
-type MinerCLI struct {
-	config  *MinerConfig
-	wallet  *crypto.Wallet
-	miner   *mining.Miner
-	running bool
+// MiningStats represents mining statistics
+type MiningStats struct {
+	mu            sync.RWMutex
+	StartTime     time.Time
+	TotalHashes   uint64
+	BlocksFound   uint64
+	CurrentRate   float64
+	LastBlockTime time.Time
 }
 
-var (
-	version = "1.0.2"
-)
+// MiningEvent represents a mining event
+type MiningEvent struct {
+	Type      string
+	Data      interface{}
+	Timestamp time.Time
+}
 
-func main() {
-	// Parse command line flags
-	config := parseFlags()
+// RPCBlockchainV2 represents professional RPC blockchain client
+type RPCBlockchainV2 struct {
+	rpcURL    string
+	client    *http.Client
+	mu        sync.RWMutex
+	lastBlock *core.Block
+}
 
-	// Create miner CLI
-	minerCLI, err := NewMinerCLI(config)
+// NewMinerV2 creates a new professional miner
+func NewMinerV2(config *MinerConfig) *MinerV2 {
+	blockchain, err := NewRPCBlockchainV2(config.RPCURL)
 	if err != nil {
-		log.Fatalf("Failed to create miner: %v", err)
+		log.Fatalf("Failed to create RPC blockchain: %v", err)
 	}
 
-	// Initialize miner
-	if err := minerCLI.Initialize(); err != nil {
-		log.Fatalf("Failed to initialize miner: %v", err)
-	}
-
-	// Start mining
-	if err := minerCLI.Start(); err != nil {
-		log.Fatalf("Failed to start miner: %v", err)
-	}
-
-	// Wait for shutdown signal
-	waitForShutdown(minerCLI)
-}
-
-// parseFlags parses command line flags
-func parseFlags() *MinerConfig {
-	config := &MinerConfig{}
-
-	flag.StringVar(&config.Wallet, "wallet", "", "Wallet address for mining rewards")
-	flag.IntVar(&config.Threads, "threads", 1, "Number of mining threads")
-	flag.StringVar(&config.RPCURL, "rpc", "http://localhost:16314", "RPC server URL")
-	flag.StringVar(&config.LogLevel, "log", "info", "Log level")
-	flag.BoolVar(&config.Stats, "stats", true, "Enable mining statistics")
-	flag.DurationVar(&config.StatsInterval, "stats-interval", 30*time.Second, "Statistics update interval")
-
-	// Version flag
-	showVersion := flag.Bool("version", false, "Show version information")
-
-	flag.Parse()
-
-	// Check for version flag
-	if *showVersion {
-		fmt.Printf("Kalon Miner v%s\n", version)
-		os.Exit(0)
-	}
-
-	return config
-}
-
-// NewMinerCLI creates a new miner CLI
-func NewMinerCLI(config *MinerConfig) (*MinerCLI, error) {
-	return &MinerCLI{
-		config: config,
-	}, nil
-}
-
-// Initialize initializes the miner
-func (mc *MinerCLI) Initialize() error {
-	log.Printf("Initializing Kalon Miner v%s", version)
-
-	// Create wallet if not provided
-	if mc.config.Wallet == "" {
-		wallet, err := crypto.NewWallet("")
-		if err != nil {
-			return fmt.Errorf("failed to create wallet: %v", err)
-		}
-		mc.wallet = wallet
-
-		// Get wallet address
-		address, err := wallet.GetAddressString()
-		if err != nil {
-			return fmt.Errorf("failed to get wallet address: %v", err)
-		}
-		mc.config.Wallet = address
-
-		log.Printf("Created new wallet: %s", address)
-	} else {
-		// Create a wallet for the provided address
-		// In a real implementation, you would load the wallet from storage
-		wallet, err := crypto.NewWallet("")
-		if err != nil {
-			return fmt.Errorf("failed to create wallet for address: %v", err)
-		}
-		mc.wallet = wallet
-		log.Printf("Using provided wallet: %s", mc.config.Wallet)
-	}
-
-	// Create RPC blockchain client for real node communication
-	rpcBlockchain, err := NewRPCBlockchain(mc.config.RPCURL)
-	if err != nil {
-		return fmt.Errorf("failed to create RPC blockchain client: %v", err)
-	}
-
-	// Create miner with RPC blockchain
-	mc.miner = mining.NewMiner(rpcBlockchain, mc.wallet, mc.config.Threads)
-
-	log.Printf("Miner initialized successfully")
-	return nil
-}
-
-// Start starts the miner
-func (mc *MinerCLI) Start() error {
-	if mc.running {
-		return fmt.Errorf("miner is already running")
-	}
-
-	log.Printf("Starting Kalon Miner...")
-	log.Printf("Wallet: %s", mc.config.Wallet)
-	log.Printf("Threads: %d", mc.config.Threads)
-	log.Printf("RPC URL: %s", mc.config.RPCURL)
-
-	mc.running = true
-
-	// Start mining loop
-	go mc.miningLoop()
-
-	// Start statistics loop
-	if mc.config.Stats {
-		go mc.statsLoop()
-	}
-
-	log.Printf("Kalon Miner started successfully")
-	return nil
-}
-
-// Stop stops the miner
-func (mc *MinerCLI) Stop() error {
-	if !mc.running {
-		return fmt.Errorf("miner is not running")
-	}
-
-	log.Printf("Stopping Kalon Miner...")
-	mc.running = false
-	log.Printf("Kalon Miner stopped")
-	return nil
-}
-
-// miningLoop is the main mining loop
-func (mc *MinerCLI) miningLoop() {
-	// Start real mining
-	if err := mc.miner.Start(); err != nil {
-		log.Printf("Failed to start miner: %v", err)
-		return
-	}
-
-	// Keep mining running
-	for mc.running {
-		time.Sleep(30 * time.Second)
-
-		if !mc.miner.IsRunning() {
-			break
-		}
-
-		stats := mc.miner.GetStats()
-		log.Printf("Mining Stats - Threads: %d, Hash Rate: %.2f H/s, Blocks Found: %d",
-			mc.config.Threads, stats.CurrentHashRate, stats.BlocksFound)
+	return &MinerV2{
+		config:     config,
+		blockchain: blockchain,
+		running:    false,
+		stats:      &MiningStats{StartTime: time.Now()},
+		eventBus:   make(chan MiningEvent, 100),
+		stopChan:   make(chan struct{}),
 	}
 }
 
-// statsLoop prints mining statistics
-func (mc *MinerCLI) statsLoop() {
-	for mc.running {
-		time.Sleep(mc.config.StatsInterval)
-
-		if mc.running {
-			log.Printf("Mining Stats - Threads: %d, Wallet: %s",
-				mc.config.Threads, mc.config.Wallet)
-		}
-	}
-}
-
-// waitForShutdown waits for shutdown signals
-func waitForShutdown(minerCLI *MinerCLI) {
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	<-sigChan
-	log.Printf("Shutdown signal received")
-
-	if err := minerCLI.Stop(); err != nil {
-		log.Printf("Error stopping miner: %v", err)
-	}
-
-	os.Exit(0)
-}
-
-// RPCBlockchain implements the mining.Blockchain interface via RPC
-type RPCBlockchain struct {
-	rpcURL string
-	client *http.Client
-}
-
-// NewRPCBlockchain creates a new RPC blockchain client
-func NewRPCBlockchain(rpcURL string) (*RPCBlockchain, error) {
-	return &RPCBlockchain{
+// NewRPCBlockchainV2 creates a new professional RPC blockchain client
+func NewRPCBlockchainV2(rpcURL string) (*RPCBlockchainV2, error) {
+	return &RPCBlockchainV2{
 		rpcURL: rpcURL,
 		client: &http.Client{Timeout: 30 * time.Second},
 	}, nil
 }
 
-// RPCRequest represents a JSON-RPC request
-type RPCRequest struct {
-	JSONRPC string      `json:"jsonrpc"`
-	Method  string      `json:"method"`
-	Params  interface{} `json:"params"`
-	ID      int         `json:"id"`
-}
+// Start starts the miner professionally
+func (m *MinerV2) Start() error {
+	m.mu.Lock()
+	if m.running {
+		m.mu.Unlock()
+		return fmt.Errorf("miner is already running")
+	}
+	m.running = true
+	m.mu.Unlock()
 
-// RPCResponse represents a JSON-RPC response
-type RPCResponse struct {
-	JSONRPC string      `json:"jsonrpc"`
-	Result  interface{} `json:"result"`
-	Error   *RPCError   `json:"error"`
-	ID      int         `json:"id"`
-}
+	log.Printf("🚀 Starting Professional Kalon Miner v2.0")
+	log.Printf("   Wallet: %s", m.config.Wallet)
+	log.Printf("   Threads: %d", m.config.Threads)
+	log.Printf("   RPC URL: %s", m.config.RPCURL)
 
-// RPCError represents an RPC error
-type RPCError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-}
-
-// GetBestBlock returns the best block from the node
-func (rpc *RPCBlockchain) GetBestBlock() *core.Block {
-	req := RPCRequest{
-		JSONRPC: "2.0",
-		Method:  "getBestBlock",
-		Params:  map[string]interface{}{},
-		ID:      1,
+	// Start mining threads
+	for i := 0; i < m.config.Threads; i++ {
+		m.wg.Add(1)
+		go m.miningWorker(i)
 	}
 
-	resp, err := rpc.callRPC(req)
+	// Start stats reporter
+	m.wg.Add(1)
+	go m.statsReporter()
+
+	// Start event processor
+	m.wg.Add(1)
+	go m.eventProcessor()
+
+	return nil
+}
+
+// Stop stops the miner gracefully
+func (m *MinerV2) Stop() error {
+	m.mu.Lock()
+	if !m.running {
+		m.mu.Unlock()
+		return fmt.Errorf("miner is not running")
+	}
+	m.running = false
+	m.mu.Unlock()
+
+	log.Printf("🛑 Stopping miner...")
+
+	// Signal all workers to stop
+	close(m.stopChan)
+
+	// Wait for all workers to finish
+	m.wg.Wait()
+
+	log.Printf("✅ Miner stopped successfully")
+	return nil
+}
+
+// miningWorker performs mining work
+func (m *MinerV2) miningWorker(workerID int) {
+	defer m.wg.Done()
+
+	log.Printf("🔧 Mining worker %d started", workerID)
+
+	for {
+		select {
+		case <-m.stopChan:
+			log.Printf("🔧 Mining worker %d stopped", workerID)
+			return
+		default:
+			m.mineBlock(workerID)
+		}
+	}
+}
+
+// mineBlock mines a single block
+func (m *MinerV2) mineBlock(workerID int) {
+	// Get miner address
+	miner, err := m.parseAddress(m.config.Wallet)
 	if err != nil {
-		log.Printf("Failed to get best block: %v", err)
-		// Return a fallback block if RPC fails
-		return &core.Block{
-			Header: core.BlockHeader{
-				Number:     0,
-				Timestamp:  time.Now(),
-				Difficulty: 1000,
-			},
+		log.Printf("❌ Failed to parse wallet address: %v", err)
+		time.Sleep(1 * time.Second)
+		return
+	}
+
+	// Create new block template with transactions from RPC server
+	block := m.blockchain.CreateNewBlock(miner, []core.Transaction{})
+	if block == nil {
+		log.Printf("❌ Failed to create block template")
+		time.Sleep(1 * time.Second)
+		return
+	}
+
+	// Mine the block
+	startTime := time.Now()
+	nonce := uint64(0)
+	target := uint64(1) << (64 - block.Header.Difficulty) // Use 64-bit target, not 256-bit
+
+	for {
+		select {
+		case <-m.stopChan:
+			return
+		default:
+			// Update nonce
+			block.Header.Nonce = nonce
+			block.Hash = block.CalculateHash()
+
+			// Check if hash meets target
+			hashInt := binary.BigEndian.Uint64(block.Hash[:8])
+			if hashInt < target {
+				// Block found!
+				m.handleBlockFound(block, workerID, time.Since(startTime))
+				return
+			}
+
+			nonce++
+			if nonce%1000000 == 0 {
+				// Update stats every million hashes
+				m.updateStats(1000000, time.Since(startTime))
+			}
 		}
 	}
-
-	// Parse block from response
-	blockData, ok := resp.Result.(map[string]interface{})
-	if !ok {
-		log.Printf("Invalid block response format: %v", resp.Result)
-		// Return fallback block
-		return &core.Block{
-			Header: core.BlockHeader{
-				Number:     0,
-				Timestamp:  time.Now(),
-				Difficulty: 1000,
-			},
-		}
-	}
-
-	// Convert to core.Block (simplified with nil checks)
-	number, ok := blockData["number"].(float64)
-	if !ok {
-		log.Printf("Invalid number in block response: %v", blockData["number"])
-		// Return fallback block
-		return &core.Block{
-			Header: core.BlockHeader{
-				Number:     0,
-				Timestamp:  time.Now(),
-				Difficulty: 1000,
-			},
-		}
-	}
-
-	difficulty, ok := blockData["difficulty"].(float64)
-	if !ok {
-		log.Printf("Invalid difficulty in block response: %v", blockData["difficulty"])
-		// Return fallback block
-		return &core.Block{
-			Header: core.BlockHeader{
-				Number:     uint64(number),
-				Timestamp:  time.Now(),
-				Difficulty: 1000,
-			},
-		}
-	}
-
-	block := &core.Block{
-		Header: core.BlockHeader{
-			Number:     uint64(number),
-			Timestamp:  time.Now(), // Simplified
-			Difficulty: uint64(difficulty),
-		},
-	}
-
-	return block
 }
 
-// CreateNewBlock creates a new block template for mining
-func (rpc *RPCBlockchain) CreateNewBlock(miner core.Address, txs []core.Transaction) *core.Block {
-	// Add delay to prevent race conditions with node
-	time.Sleep(500 * time.Millisecond)
+// handleBlockFound handles a found block
+func (m *MinerV2) handleBlockFound(block *core.Block, workerID int, duration time.Duration) {
+	log.Printf("🎉 Block found by worker %d! Hash: %x, Nonce: %d, Time: %v",
+		workerID, block.Hash, block.Header.Nonce, duration)
 
+	// Update stats
+	m.stats.mu.Lock()
+	m.stats.BlocksFound++
+	m.stats.LastBlockTime = time.Now()
+	m.stats.mu.Unlock()
+
+	// Emit event
+	m.eventBus <- MiningEvent{
+		Type: "blockFound",
+		Data: map[string]interface{}{
+			"block":    block,
+			"workerID": workerID,
+			"duration": duration,
+		},
+		Timestamp: time.Now(),
+	}
+
+	// Submit block
+	if err := m.blockchain.AddBlock(block); err != nil {
+		log.Printf("❌ Failed to submit block: %v", err)
+	} else {
+		log.Printf("✅ Block #%d submitted successfully: %x", block.Header.Number, block.Hash)
+	}
+}
+
+// updateStats updates mining statistics
+func (m *MinerV2) updateStats(hashes uint64, duration time.Duration) {
+	m.stats.mu.Lock()
+	m.stats.TotalHashes += hashes
+	m.stats.CurrentRate = float64(hashes) / duration.Seconds()
+	m.stats.mu.Unlock()
+}
+
+// statsReporter reports mining statistics
+func (m *MinerV2) statsReporter() {
+	defer m.wg.Done()
+
+	ticker := time.NewTicker(m.config.StatsInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			m.printStats()
+		case <-m.stopChan:
+			return
+		}
+	}
+}
+
+// printStats prints current statistics
+func (m *MinerV2) printStats() {
+	m.stats.mu.RLock()
+	startTime := m.stats.StartTime
+	totalHashes := m.stats.TotalHashes
+	blocksFound := m.stats.BlocksFound
+	currentRate := m.stats.CurrentRate
+	m.stats.mu.RUnlock()
+
+	uptime := time.Since(startTime)
+	avgRate := float64(totalHashes) / uptime.Seconds()
+
+	log.Printf("📊 Mining Stats - Uptime: %v, Total Hashes: %d, Blocks Found: %d, Avg Rate: %.2f H/s, Current Rate: %.2f H/s",
+		uptime.Truncate(time.Second), totalHashes, blocksFound, avgRate, currentRate)
+}
+
+// eventProcessor processes mining events
+func (m *MinerV2) eventProcessor() {
+	defer m.wg.Done()
+
+	for {
+		select {
+		case event := <-m.eventBus:
+			m.processEvent(event)
+		case <-m.stopChan:
+			return
+		}
+	}
+}
+
+// processEvent processes a mining event
+func (m *MinerV2) processEvent(event MiningEvent) {
+	switch event.Type {
+	case "blockFound":
+		// Handle block found event
+		log.Printf("📢 Event: Block found at %v", event.Timestamp)
+	default:
+		log.Printf("📢 Event: %s at %v", event.Type, event.Timestamp)
+	}
+}
+
+// CreateNewBlock creates a new block template
+func (rpc *RPCBlockchainV2) CreateNewBlock(miner core.Address, txs []core.Transaction) *core.Block {
 	req := RPCRequest{
 		JSONRPC: "2.0",
 		Method:  "createBlockTemplate",
@@ -353,104 +318,196 @@ func (rpc *RPCBlockchain) CreateNewBlock(miner core.Address, txs []core.Transact
 
 	resp, err := rpc.callRPC(req)
 	if err != nil {
-		log.Printf("Failed to create block template: %v", err)
-		// Return a fallback block template if RPC fails
-		return &core.Block{
-			Header: core.BlockHeader{
-				Number:     1,
-				Timestamp:  time.Now(),
-				Difficulty: 1000,
-				Miner:      miner,
-				Nonce:      0,
-			},
-			Txs: txs,
-		}
-	}
-
-	log.Printf("RPC Response: %+v", resp)
-
-	// Parse block template from response
-	templateData, ok := resp.Result.(map[string]interface{})
-	if !ok {
-		log.Printf("Invalid block template response format")
+		log.Printf("❌ Failed to create block template: %v", err)
 		return nil
 	}
 
-	log.Printf("Parent Hash from template: %s", templateData["parentHash"])
-
-	// Parse parent hash from template
-	var parentHash core.Hash
-	if parentHashData, ok := templateData["parentHash"]; ok {
-		switch v := parentHashData.(type) {
-		case string:
-			// Try to parse as hex string
-			hashBytes, err := hex.DecodeString(v)
-			if err == nil && len(hashBytes) == 32 {
-				copy(parentHash[:], hashBytes)
-				log.Printf("✅ Parsed parent hash from template: %x", parentHash)
-			} else {
-				log.Printf("❌ Failed to parse parent hash as hex: %s, error: %v", v, err)
-				// Use zero hash as fallback
-				parentHash = core.Hash{}
-			}
-		case []byte:
-			// Direct byte array
-			if len(v) == 32 {
-				copy(parentHash[:], v)
-				log.Printf("✅ Parsed parent hash from template (bytes): %x", parentHash)
-			} else {
-				log.Printf("❌ Invalid parent hash length: %d", len(v))
-				parentHash = core.Hash{}
-			}
-		default:
-			log.Printf("❌ Unknown parent hash type: %T, value: %v", v, v)
-			parentHash = core.Hash{}
-		}
-	} else {
-		log.Printf("❌ No parent hash in template: %v", templateData)
-		parentHash = core.Hash{}
+	if resp.Error != nil {
+		log.Printf("❌ RPC error: %s", resp.Error.Message)
+		return nil
 	}
 
-	// Use current time instead of template timestamp to avoid race conditions
-	// when miner and node run on the same server
-	currentTime := time.Now()
+	// Parse response
+	result, ok := resp.Result.(map[string]interface{})
+	if !ok {
+		log.Printf("❌ Invalid response format")
+		return nil
+	}
 
-	// Convert to core.Block
+	// Extract values
+	number, _ := result["number"].(float64)
+	difficulty, _ := result["difficulty"].(float64)
+	parentHashStr, _ := result["parentHash"].(string)
+	timestamp, _ := result["timestamp"].(float64)
+
+	// Parse parent hash
+	parentHashBytes, err := hex.DecodeString(parentHashStr)
+	if err != nil {
+		log.Printf("❌ Failed to parse parent hash: %v", err)
+		return nil
+	}
+
+	var parentHash core.Hash
+	copy(parentHash[:], parentHashBytes)
+
+	// CRITICAL: Extract transactions from RPC response
+	var blockTxs []core.Transaction
+	if txsData, ok := result["transactions"].([]interface{}); ok {
+		for _, txData := range txsData {
+			if txMap, ok := txData.(map[string]interface{}); ok {
+				// Parse transaction from map
+				tx := core.Transaction{}
+
+				// Parse From address
+				if fromStr, ok := txMap["from"].(string); ok {
+					tx.From = core.AddressFromString(fromStr)
+				}
+
+				// Parse To address
+				if toStr, ok := txMap["to"].(string); ok {
+					tx.To = core.AddressFromString(toStr)
+				}
+
+				// Parse Amount
+				if amount, ok := txMap["amount"].(float64); ok {
+					tx.Amount = uint64(amount)
+				}
+
+				// Parse other fields
+				if nonce, ok := txMap["nonce"].(float64); ok {
+					tx.Nonce = uint64(nonce)
+				}
+				if fee, ok := txMap["fee"].(float64); ok {
+					tx.Fee = uint64(fee)
+				}
+				if gasUsed, ok := txMap["gasUsed"].(float64); ok {
+					tx.GasUsed = uint64(gasUsed)
+				}
+				if gasPrice, ok := txMap["gasPrice"].(float64); ok {
+					tx.GasPrice = uint64(gasPrice)
+				}
+				if data, ok := txMap["data"].([]byte); ok {
+					tx.Data = data
+				}
+				if signature, ok := txMap["signature"].([]byte); ok {
+					tx.Signature = signature
+				}
+				if hashStr, ok := txMap["hash"].(string); ok {
+					if hashBytes, err := hex.DecodeString(hashStr); err == nil {
+						copy(tx.Hash[:], hashBytes)
+					}
+				}
+
+				// Parse UTXO fields
+				if inputs, ok := txMap["inputs"].([]interface{}); ok {
+					for _, inputData := range inputs {
+						if inputMap, ok := inputData.(map[string]interface{}); ok {
+							input := core.TxInput{}
+							if prevTxHashStr, ok := inputMap["previousTxHash"].(string); ok {
+								if prevTxHashBytes, err := hex.DecodeString(prevTxHashStr); err == nil {
+									copy(input.PreviousTxHash[:], prevTxHashBytes)
+								}
+							}
+							if index, ok := inputMap["index"].(float64); ok {
+								input.Index = uint32(index)
+							}
+							if signature, ok := inputMap["signature"].([]byte); ok {
+								input.Signature = signature
+							}
+							tx.Inputs = append(tx.Inputs, input)
+						}
+					}
+				}
+
+				if outputs, ok := txMap["outputs"].([]interface{}); ok {
+					for _, outputData := range outputs {
+						if outputMap, ok := outputData.(map[string]interface{}); ok {
+							output := core.TxOutput{}
+							if addressStr, ok := outputMap["address"].(string); ok {
+								output.Address = core.AddressFromString(addressStr)
+							}
+							if amount, ok := outputMap["amount"].(float64); ok {
+								output.Amount = uint64(amount)
+							}
+							tx.Outputs = append(tx.Outputs, output)
+						}
+					}
+				}
+
+				// Parse timestamp
+				if timestamp, ok := txMap["timestamp"].(string); ok {
+					if t, err := time.Parse(time.RFC3339, timestamp); err == nil {
+						tx.Timestamp = t
+					}
+				}
+
+				blockTxs = append(blockTxs, tx)
+				log.Printf("💰 Loaded transaction with %d outputs, total amount: %d", len(tx.Outputs), tx.Amount)
+			}
+		}
+	}
+
+	// Create block with transactions from RPC server
 	block := &core.Block{
 		Header: core.BlockHeader{
-			ParentHash: parentHash,
-			Number:     uint64(templateData["number"].(float64)),
-			Timestamp:  currentTime, // Use current time to ensure it's always after parent
-			Difficulty: uint64(templateData["difficulty"].(float64)),
-			Miner:      miner,
-			Nonce:      0,
-			TxCount:    uint32(len(txs)),
+			ParentHash:  parentHash, // CRITICAL: Use actual parent hash
+			Number:      uint64(number),
+			Timestamp:   time.Unix(int64(timestamp), 0),
+			Difficulty:  uint64(difficulty),
+			Miner:       miner,
+			Nonce:       0,
+			MerkleRoot:  core.Hash{},
+			TxCount:     uint32(len(blockTxs)),
+			NetworkFee:  0,
+			TreasuryFee: 0,
 		},
-		Txs: txs,
+		Txs:  blockTxs, // Use transactions from RPC server
+		Hash: core.Hash{},
 	}
 
-	log.Printf("Created block with parent hash: %x", block.Header.ParentHash)
-	log.Printf("Block timestamp: %d (current time)", block.Header.Timestamp.Unix())
+	// Calculate hash
+	block.Hash = block.CalculateHash()
+
+	log.Printf("🔧 Created block template #%d with %d transactions and parent hash: %x", block.Header.Number, len(blockTxs), block.Header.ParentHash)
 
 	return block
 }
 
-// AddBlock submits a mined block to the node
-func (rpc *RPCBlockchain) AddBlock(block *core.Block) error {
-	log.Printf("Submitting block with parent hash: %x", block.Header.ParentHash)
-	log.Printf("Submitting block timestamp: %d", block.Header.Timestamp.Unix())
+// AddBlock submits a mined block
+func (rpc *RPCBlockchainV2) AddBlock(block *core.Block) error {
+	// Convert transactions to JSON format
+	var transactions []map[string]interface{}
+	for _, tx := range block.Txs {
+		txMap := map[string]interface{}{
+			"from":      tx.From.String(),
+			"to":        tx.To.String(),
+			"amount":    float64(tx.Amount),
+			"nonce":     float64(tx.Nonce),
+			"fee":       float64(tx.Fee),
+			"gasUsed":   float64(tx.GasUsed),
+			"gasPrice":  float64(tx.GasPrice),
+			"data":      tx.Data,
+			"signature": tx.Signature,
+			"hash":      hex.EncodeToString(tx.Hash[:]),
+			"inputs":    tx.Inputs,
+			"outputs":   tx.Outputs,
+			"timestamp": tx.Timestamp.Format(time.RFC3339),
+		}
+		transactions = append(transactions, txMap)
+	}
 
 	req := RPCRequest{
 		JSONRPC: "2.0",
 		Method:  "submitBlock",
 		Params: map[string]interface{}{
 			"block": map[string]interface{}{
-				"number":     float64(block.Header.Number),
-				"difficulty": float64(block.Header.Difficulty),
-				"nonce":      float64(block.Header.Nonce),
-				"hash":       block.Hash.String(),
-				"parentHash": hex.EncodeToString(block.Header.ParentHash[:]),
-				"timestamp":  float64(block.Header.Timestamp.Unix()),
+				"number":       float64(block.Header.Number),
+				"difficulty":   float64(block.Header.Difficulty),
+				"nonce":        float64(block.Header.Nonce),
+				"hash":         hex.EncodeToString(block.Hash[:]),
+				"parentHash":   hex.EncodeToString(block.Header.ParentHash[:]),
+				"timestamp":    float64(block.Header.Timestamp.Unix()),
+				"transactions": transactions, // CRITICAL: Include transactions!
 			},
 		},
 		ID: 3,
@@ -465,191 +522,99 @@ func (rpc *RPCBlockchain) AddBlock(block *core.Block) error {
 		return fmt.Errorf("RPC error: %s", resp.Error.Message)
 	}
 
-	log.Printf("✅ Block #%d submitted to node: %x", block.Header.Number, block.Hash)
-
-	// Add delay after block submission to let node process it
-	time.Sleep(1000 * time.Millisecond)
-
+	log.Printf("✅ Block #%d submitted successfully", block.Header.Number)
 	return nil
 }
 
-// GetConsensus returns the consensus manager
-func (rpc *RPCBlockchain) GetConsensus() mining.Consensus {
-	return &RPCConsensus{rpc: rpc}
-}
-
-// callRPC makes an RPC call to the node
-func (rpc *RPCBlockchain) callRPC(req RPCRequest) (*RPCResponse, error) {
+// callRPC makes an RPC call
+func (rpc *RPCBlockchainV2) callRPC(req RPCRequest) (*RPCResponse, error) {
 	jsonData, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
 
-	httpReq, err := http.NewRequest("POST", rpc.rpcURL, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return nil, err
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := rpc.client.Do(httpReq)
+	resp, err := rpc.client.Post(rpc.rpcURL, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
 	var rpcResp RPCResponse
-	if err := json.Unmarshal(body, &rpcResp); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&rpcResp); err != nil {
 		return nil, err
 	}
 
 	return &rpcResp, nil
 }
 
-// RPCConsensus implements the mining.Consensus interface via RPC
-type RPCConsensus struct {
-	rpc *RPCBlockchain
+// parseAddress parses a wallet address
+func (m *MinerV2) parseAddress(address string) (core.Address, error) {
+	// Simple address parsing - create hash from string
+	hash := sha256.Sum256([]byte(address))
+	var addr core.Address
+	copy(addr[:], hash[:20])
+	return addr, nil
 }
 
-// CalculateDifficulty calculates the difficulty for a block
-func (rc *RPCConsensus) CalculateDifficulty(height uint64, parent *core.Block) uint64 {
-	req := RPCRequest{
-		JSONRPC: "2.0",
-		Method:  "calculateDifficulty",
-		Params: map[string]interface{}{
-			"height": height,
-		},
-		ID: 4,
+// RPCRequest represents a JSON-RPC request
+type RPCRequest struct {
+	JSONRPC string      `json:"jsonrpc"`
+	Method  string      `json:"method"`
+	Params  interface{} `json:"params"`
+	ID      int         `json:"id"`
+}
+
+// RPCResponse represents a JSON-RPC response
+type RPCResponse struct {
+	JSONRPC string      `json:"jsonrpc"`
+	Result  interface{} `json:"result,omitempty"`
+	Error   *RPCError   `json:"error,omitempty"`
+	ID      int         `json:"id"`
+}
+
+// RPCError represents a JSON-RPC error
+type RPCError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    string `json:"data,omitempty"`
+}
+
+func main() {
+	var (
+		wallet        = flag.String("wallet", "", "Wallet address")
+		threads       = flag.Int("threads", 2, "Number of mining threads")
+		rpcURL        = flag.String("rpc", "http://localhost:16316", "RPC server URL")
+		statsInterval = flag.Duration("stats", 30*time.Second, "Statistics reporting interval")
+	)
+	flag.Parse()
+
+	if *wallet == "" {
+		log.Fatal("❌ Wallet address is required")
 	}
 
-	resp, err := rc.rpc.callRPC(req)
-	if err != nil {
-		log.Printf("Failed to calculate difficulty: %v", err)
-		return 1000 // Fallback difficulty
+	config := &MinerConfig{
+		Wallet:        *wallet,
+		Threads:       *threads,
+		RPCURL:        *rpcURL,
+		StatsInterval: *statsInterval,
 	}
 
-	if difficulty, ok := resp.Result.(float64); ok {
-		return uint64(difficulty)
+	miner := NewMinerV2(config)
+
+	// Start miner
+	if err := miner.Start(); err != nil {
+		log.Fatalf("❌ Failed to start miner: %v", err)
 	}
 
-	return 1000 // Fallback difficulty
-}
+	// Wait for shutdown signal
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-// CalculateTarget calculates the target hash for mining
-func (rc *RPCConsensus) CalculateTarget(difficulty uint64) []byte {
-	// Simple target calculation based on difficulty
-	target := make([]byte, 32)
-	for i := 0; i < 32; i++ {
-		if difficulty > uint64(i*8) {
-			target[i] = 0xFF
-		} else {
-			target[i] = 0x00
-		}
+	<-sigChan
+	log.Printf("🛑 Shutdown signal received")
+
+	// Stop miner
+	if err := miner.Stop(); err != nil {
+		log.Printf("❌ Error stopping miner: %v", err)
 	}
-	return target
-}
-
-// ValidateBlock validates a block
-func (rc *RPCConsensus) ValidateBlock(block *core.Block, parent *core.Block) error {
-	// Basic validation
-	if block.Header.Number != parent.Header.Number+1 {
-		return fmt.Errorf("invalid block number")
-	}
-	return nil
-}
-
-// MockBlockchain implements the mining.Blockchain interface for testing
-type MockBlockchain struct {
-	bestBlock *core.Block
-	height    uint64
-}
-
-// GetBestBlock returns the best block
-func (mb *MockBlockchain) GetBestBlock() *core.Block {
-	if mb.bestBlock == nil {
-		// Create genesis block
-		mb.bestBlock = &core.Block{
-			Header: core.BlockHeader{
-				Number:     0,
-				Timestamp:  time.Now(),
-				Difficulty: 1000,
-				Miner:      core.Address{},
-				Nonce:      0,
-			},
-		}
-		mb.height = 0
-	}
-	return mb.bestBlock
-}
-
-// CreateNewBlock creates a new block to mine
-func (mb *MockBlockchain) CreateNewBlock(miner core.Address, txs []core.Transaction) *core.Block {
-	bestBlock := mb.GetBestBlock()
-
-	return &core.Block{
-		Header: core.BlockHeader{
-			ParentHash: bestBlock.Hash,
-			Number:     bestBlock.Header.Number + 1,
-			Timestamp:  time.Now(),
-			Difficulty: mb.GetConsensus().CalculateDifficulty(bestBlock.Header.Number+1, bestBlock),
-			Miner:      miner,
-			Nonce:      0,
-			TxCount:    uint32(len(txs)),
-		},
-		Txs: txs,
-	}
-}
-
-// AddBlock adds a block to the blockchain
-func (mb *MockBlockchain) AddBlock(block *core.Block) error {
-	mb.bestBlock = block
-	mb.height = block.Header.Number
-	log.Printf("✅ Block #%d added to blockchain: %x", block.Header.Number, block.Hash)
-	return nil
-}
-
-// GetConsensus returns the consensus manager
-func (mb *MockBlockchain) GetConsensus() mining.Consensus {
-	return &MockConsensus{}
-}
-
-// MockConsensus implements the mining.Consensus interface
-type MockConsensus struct{}
-
-// CalculateDifficulty calculates the difficulty for a block
-func (mc *MockConsensus) CalculateDifficulty(height uint64, parent *core.Block) uint64 {
-	// Simple difficulty calculation for testing
-	baseDifficulty := uint64(1000)
-	if height > 100 {
-		return baseDifficulty * 2
-	}
-	return baseDifficulty
-}
-
-// CalculateTarget calculates the target hash for mining
-func (mc *MockConsensus) CalculateTarget(difficulty uint64) []byte {
-	// Simple target calculation
-	target := make([]byte, 32)
-	for i := 0; i < 32; i++ {
-		if difficulty > uint64(i*8) {
-			target[i] = 0xFF
-		} else {
-			target[i] = 0x00
-		}
-	}
-	return target
-}
-
-// ValidateBlock validates a block
-func (mc *MockConsensus) ValidateBlock(block *core.Block, parent *core.Block) error {
-	// Simple validation for testing
-	if block.Header.Number != parent.Header.Number+1 {
-		return fmt.Errorf("invalid block number")
-	}
-	return nil
 }
