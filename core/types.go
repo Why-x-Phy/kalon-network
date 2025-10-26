@@ -50,10 +50,16 @@ func AddressFromString(s string) Address {
 	var out Address
 	s = strings.TrimSpace(s)
 	
-	// Bech32 with "kalon1" prefix - can't decode here due to import cycle
-	// Will be handled in rpc/server_v2.go with proper Bech32 decoding
+	// Handle kalon1+hex format (kalon1 followed by 40-char hex)
 	if strings.HasPrefix(s, "kalon1") {
-		// Return zero to force caller to handle Bech32 decoding
+		hexStr := strings.TrimPrefix(s, "kalon1")
+		if len(hexStr) == 40 {
+			if b, err := hex.DecodeString(hexStr); err == nil && len(b) == 20 {
+				copy(out[:], b)
+				return out
+			}
+		}
+		// If not valid hex after kalon1, return zero
 		return out
 	}
 	
