@@ -562,9 +562,20 @@ func (rpc *RPCBlockchainV2) callRPC(req RPCRequest) (*RPCResponse, error) {
 
 // parseAddress parses a wallet address
 func (m *MinerV2) parseAddress(address string) (core.Address, error) {
-	// Simple address parsing - create hash from string
+	// Try to decode as hex first
+	if len(address) == 40 {
+		bytes, err := hex.DecodeString(address)
+		if err == nil && len(bytes) == 20 {
+			var addr core.Address
+			copy(addr[:], bytes)
+			return addr, nil
+		}
+	}
+	
+	// Fallback: create hash from string
 	hash := sha256.Sum256([]byte(address))
 	var addr core.Address
+	// Use first 20 bytes of hash
 	copy(addr[:], hash[:20])
 	return addr, nil
 }
