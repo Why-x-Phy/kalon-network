@@ -211,26 +211,26 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 		decodedBytes, err := crypto.DecodeBech32(minerStr)
 		if err == nil && len(decodedBytes) == 20 {
 			copy(miner[:], decodedBytes)
-			log.Printf("✅ Parsed Bech32 address: %s -> %x", minerStr, miner)
+			log.Printf("✅ Parsed Bech32: %s -> %x", minerStr[:20]+"...", miner)
 		} else {
-			log.Printf("⚠️ Failed to decode Bech32, using fallback")
+			log.Printf("⚠️ Failed to decode Bech32")
 			miner = core.AddressFromString(minerStr)
 		}
 	} else if len(minerStr) == 40 {
-		// 40-char hex string
+		// 40-char hex string - decode directly to bytes
 		if decoded, err := hex.DecodeString(minerStr); err == nil && len(decoded) == 20 {
 			copy(miner[:], decoded)
-			log.Printf("✅ Parsed hex address: %s -> %x", minerStr, miner)
+			log.Printf("✅ Parsed 40-char hex: %s... -> %x", minerStr[:10], miner)
 		} else {
+			log.Printf("⚠️ Failed to decode 40-char hex")
 			miner = core.AddressFromString(minerStr)
-			log.Printf("⚠️ Failed to decode hex, using fallback")
 		}
 	} else {
 		// Other format - use AddressFromString
 		miner = core.AddressFromString(minerStr)
-		log.Printf("ℹ️ Using AddressFromString for: %s -> %x", minerStr, miner)
+		log.Printf("ℹ️ Used AddressFromString: %s", minerStr)
 	}
-	log.Printf("🔍 DEBUG - Final miner address bytes: %x", miner)
+	log.Printf("🔍 Final miner address: %x", miner)
 
 	// Get current blockchain state
 	bestBlock := s.blockchain.GetBestBlock()
