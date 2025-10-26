@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"strings"
 	"time"
 )
@@ -118,6 +119,18 @@ type TxInput struct {
 type TxOutput struct {
 	Address Address `json:"address"`
 	Amount  uint64  `json:"amount"`
+}
+
+// MarshalJSON customizes JSON encoding for TxOutput
+func (o TxOutput) MarshalJSON() ([]byte, error) {
+	type Alias TxOutput
+	return json.Marshal(struct {
+		Address string `json:"address"`
+		Amount  uint64 `json:"amount"`
+	}{
+		Address: o.Address.String(),
+		Amount:  o.Amount,
+	})
 }
 
 // GenesisConfig represents the genesis configuration
