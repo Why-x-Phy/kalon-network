@@ -125,7 +125,7 @@ func (o TxOutput) MarshalJSON() ([]byte, error) {
 		Address string `json:"address"`
 		Amount  uint64 `json:"amount"`
 	}{
-		Address: o.Address.String(),
+		Address: hex.EncodeToString(o.Address[:]), // Direct hex, not String() to avoid double encoding
 		Amount:  o.Amount,
 	})
 }

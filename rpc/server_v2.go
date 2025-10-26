@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/kalon-network/kalon/core"
+	"github.com/kalon-network/kalon/crypto"
 )
 
 // ServerV2 represents a professional RPC server
@@ -202,11 +204,33 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 		}
 	}
 
-	// Parse miner address using proper address parsing
-	miner := core.AddressFromString(minerStr)
-	log.Printf("🔍 DEBUG - Miner string: %s", minerStr)
-	log.Printf("🔍 DEBUG - Parsed address: %x", miner)
-	log.Printf("🔍 DEBUG - Parsed address string: %s", hex.EncodeToString(miner[:]))
+	// Parse miner address - handle Bech32, hex, and fallback
+	var miner core.Address
+	if strings.HasPrefix(minerStr, "kalon1") {
+		// Bech32 address - decode it properly
+		decodedBytes, err := crypto.DecodeBech32(minerStr)
+		if err == nil && len(decodedBytes) == 20 {
+			copy(miner[:], decodedBytes)
+			log.Printf("✅ Parsed Bech32 address: %s -> %x", minerStr, miner)
+		} else {
+			log.Printf("⚠️ Failed to decode Bech32, using fallback")
+			miner = core.AddressFromString(minerStr)
+		}
+	} else if len(minerStr) == 40 {
+		// 40-char hex string
+		if decoded, err := hex.DecodeString(minerStr); err == nil && len(decoded) == 20 {
+			copy(miner[:], decoded)
+			log.Printf("✅ Parsed hex address: %s -> %x", minerStr, miner)
+		} else {
+			miner = core.AddressFromString(minerStr)
+			log.Printf("⚠️ Failed to decode hex, using fallback")
+		}
+	} else {
+		// Other format - use AddressFromString
+		miner = core.AddressFromString(minerStr)
+		log.Printf("ℹ️ Using AddressFromString for: %s -> %x", minerStr, miner)
+	}
+	log.Printf("🔍 DEBUG - Final miner address bytes: %x", miner)
 
 	// Get current blockchain state
 	bestBlock := s.blockchain.GetBestBlock()
@@ -456,12 +480,14 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 									if len(addressStr) == 40 {
 										if decoded, err := hex.DecodeString(addressStr); err == nil && len(decoded) == 20 {
 											copy(output.Address[:], decoded)
-											log.Printf("✅ Parsed 20-byte address: %x", output.Address)
+											log.Printf("✅ Parsed hex address: %s -> %x", addressStr[:20]+"...", output.Address)
 										} else {
-											log.Printf("⚠️ Failed to decode 40-char address: %s", addressStr)
+											log.Printf("⚠️ Failed to decode hex: %s", addressStr)
+											// Fallback to AddressFromString
+											output.Address = core.AddressFromString(addressStr)
 										}
 									} else {
-										// Use AddressFromString for other formats
+										// Use AddressFromString for other formats (including Bech32)
 										output.Address = core.AddressFromString(addressStr)
 										log.Printf("✅ Used AddressFromString: %s -> %x", addressStr, output.Address)
 									}
