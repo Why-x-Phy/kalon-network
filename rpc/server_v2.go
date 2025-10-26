@@ -204,6 +204,7 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 
 	// Parse miner address using proper address parsing
 	miner := core.AddressFromString(minerStr)
+	log.Printf("🔍 DEBUG - Miner string: %s, Parsed address: %x", minerStr, miner)
 
 	// Get current blockchain state
 	bestBlock := s.blockchain.GetBestBlock()
@@ -221,6 +222,13 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 
 	// Create new block with rewards using CreateNewBlockV2
 	block := s.blockchain.CreateNewBlockV2(miner, []core.Transaction{})
+	log.Printf("🔍 DEBUG - Block created with %d transactions", len(block.Txs))
+	for i, tx := range block.Txs {
+		log.Printf("🔍 DEBUG - TX %d: %d outputs", i, len(tx.Outputs))
+		for j, output := range tx.Outputs {
+			log.Printf("🔍 DEBUG - Output %d: Address=%x, Amount=%d", j, output.Address, output.Amount)
+		}
+	}
 	if block == nil {
 		return &RPCResponse{
 			JSONRPC: "2.0",
