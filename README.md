@@ -1,151 +1,115 @@
-# Kalon Network (KALON)
+# Kalon Network
 
-CPU-first, fair-launch Proof-of-Work blockchain with network fee system and treasury management.
+Eine moderne Blockchain-Implementierung in Go mit UTXO-basiertem System.
 
-## 🪙 Features
+## ✨ Features
 
-- **CPU-only Mining**: RandomX algorithm prevents GPU/ASIC dominance
-- **Fair Launch**: 48-hour protection with 8x difficulty and reduced rewards
-- **Network Fee System**: 5% block fee + transaction fees to treasury
-- **Progressive Halving**: 3M → 6M → 12M → yearly cycles
-- **BIP-39 Wallets**: bech32 addresses (kalon1...)
-- **Cross-Platform**: Linux AMD64 + ARM64 (Raspberry Pi)
-- **Docker Support**: Easy deployment and scaling
-
-## 🏗️ Architecture
-
-```
-kalon/
-├─ cmd/
-│  ├─ kalon-node/       # Full Node – Consensus, P2P, RPC
-│  ├─ kalon-wallet/     # Wallet CLI – Create/Import/Send
-│  ├─ kalon-miner/      # Miner – RandomX CPU Mining
-│  └─ kalon-explorer/   # Explorer – Web Interface
-├─ core/                # Core Logic (Blockchain, TX, Blocks)
-├─ crypto/              # Keypairs, BIP39, bech32, Signatures
-├─ rpc/                 # JSON-RPC API
-├─ network/             # P2P Connections, Node Discovery
-├─ storage/             # LevelDB for Chain Data
-├─ explorer/
-│  ├─ api/              # Indexer API (Go)
-│  └─ ui/               # Web Interface (React)
-├─ genesis/             # genesis.json – Network Parameters
-├─ docker/              # Dockerfiles + docker-compose.yml
-└─ scripts/             # build.sh, install.sh, run.sh
-```
+- **UTXO-System**: Bitcoin-ähnliches UTXO-Model
+- **PoW-Mining**: Proof-of-Work Konsensmechanismus
+- **RPC API**: JSON-RPC Schnittstelle
+- **Wallet**: Unterstützung für Mnemonic-Phrases (BIP39)
+- **Mining**: CPU-basierte Block-Generierung
+- **Testnet**: Vorkonfiguriertes Testnet für Entwicklung
 
 ## 🚀 Quick Start
 
-### Ubuntu/Debian
 ```bash
-sudo apt update && sudo apt install -y git golang build-essential
-git clone https://github.com/kalon-network/kalon
-cd kalon
-./scripts/install.sh
-./kalon-node --init --genesis genesis/genesis.json
-./kalon-node --rpc :16314 --p2p :17333 --seednodes seed1.kalon.network:17333,seed2.kalon.network:17333
+# Repository clonen
+git clone https://github.com/Why-x-Phy/kalon-network.git
+cd kalon-network
+
+# Alles bauen
+go build -o build-v2/kalon-node-v2 cmd/kalon-node-v2/main.go
+go build -o build-v2/kalon-miner-v2 cmd/kalon-miner-v2/main.go
+go build -o build-v2/kalon-wallet cmd/kalon-wallet/main.go
+
+# Node starten
+./build-v2/kalon-node-v2 -datadir data-v2/testnet -genesis genesis/testnet.json -rpc :16316 &
+
+# Wallet erstellen
+./build-v2/kalon-wallet create
+
+# Miner starten
+./build-v2/kalon-miner-v2 -wallet DEINE_ADRESSE -threads 1 -rpc http://localhost:16316 &
 ```
 
-### Docker
-```bash
-git clone https://github.com/kalon-network/kalon
-cd kalon
-docker-compose -f docker/docker-compose.yml up
+Vollständige Anleitung: [docs/QUICKSTART.md](docs/QUICKSTART.md)
+
+## 📚 Dokumentation
+
+- [Quick Start](docs/QUICKSTART.md) - Schnelle Installation
+- [Installation](docs/INSTALLATION.md) - Detaillierte Installation
+- [Updates](docs/UPDATE.md) - Updates durchführen
+- [Server Deployment](SERVER_DEPLOYMENT.md) - Server-Deployment
+- [Wallet Setup](WALLET_SETUP.md) - Wallet-Einrichtung
+
+## 🏗 Projekt-Struktur
+
+```
+kalon-network/
+├── cmd/                 # Haupt-Anwendungen
+│   ├── kalon-node-v2/  # Blockchain-Node
+│   ├── kalon-miner-v2/ # Mining-Software
+│   └── kalon-wallet/   # Wallet-Manager
+├── core/               # Blockchain-Kern
+│   ├── blockchain.go   # Blockchain-Logik
+│   ├── consensus.go    # Konsensmechanismus
+│   └── utxo.go         # UTXO-System
+├── crypto/             # Kryptographie
+│   ├── bech32.go       # Bech32-Adressen
+│   ├── bip39.go        # Mnemonic-Phrases
+│   └── keys.go         # Schlüsselgenerierung
+├── mining/             # Mining-Logik
+├── rpc/                 # RPC-Server
+├── genesis/             # Genesis-Konfiguration
+└── docs/                # Dokumentation
 ```
 
-### Raspberry Pi (ARM64)
-```bash
-# Same as Ubuntu, but uses ARM64 binaries
-./scripts/install.sh --arch arm64
+## 🔧 Voraussetzungen
+
+- **Go**: Version 1.21+
+- **OS**: Linux, macOS, Windows
+- **RAM**: Mindestens 512MB
+- **Disk**: ~100MB
+
+## 📖 RPC API
+
+### getHeight
+```json
+{"jsonrpc":"2.0","method":"getHeight","params":{},"id":1}
 ```
 
-## 💰 Network Fee System
-
-- **Block Fee**: 5% of block reward goes to treasury
-- **Transaction Fee**: 0.01 KALON minimum + gas system
-- **Treasury Distribution**: 80% miner / 20% treasury (TX fees)
-- **Treasury Address**: `kalon1treasury00000000000000000000000`
-
-## 🌐 Networks
-
-| Network | Chain ID | Purpose | Seeds |
-|---------|----------|---------|-------|
-| CoreNet | 7716 | Internal testing | Internal only |
-| Testnet | 7717 | Public testing + Airdrop | tn1/2/3.kalon.network |
-| Mainnet | 7718 | Production | seed1/2/3.kalon.network |
-
-## 🔧 Commands
-
-### Node
-```bash
-./kalon-node --init --genesis genesis/genesis.json
-./kalon-node --rpc :16314 --p2p :17333 --seednodes seed1.kalon.network:17333
+### getBalance
+```json
+{"jsonrpc":"2.0","method":"getBalance","params":{"address":"..."},"id":2}
 ```
 
-### Wallet
-```bash
-./kalon-wallet create
-./kalon-wallet balance kalon1xyz...
-./kalon-wallet send kalon1abc... 10
+### getBestBlock
+```json
+{"jsonrpc":"2.0","method":"getBestBlock","params":{},"id":3}
 ```
 
-### Miner
-```bash
-./kalon-miner --wallet kalon1xyz... --threads 2
-```
+## 🧪 Testnet
 
-### Explorer
-```bash
-# API runs on :8081
-# UI runs on :8080
-docker-compose -f docker/docker-compose.yml up explorer
-```
+Kalon läuft standardmäßig im Testnet-Modus:
+- **Chain ID**: 7718
+- **Difficulty**: 1 (sehr einfach)
+- **Block Reward**: 5 tKALON
+- **Block Time**: ~30 Sekunden
 
-## 📊 Treasury Dashboard
+## 📄 Lizenz
 
-Access the treasury dashboard at `http://localhost:8080/treasury` to view:
-- Total treasury balance
-- Daily income (block + transaction fees)
-- Miner vs treasury distribution
-- Multi-sig wallet status
+Siehe [LICENSE](LICENSE) Datei.
 
-## 🔒 Security
+## 🤝 Beitragen
 
-- GPG-signed releases with checksums
-- Reproducible builds
-- Multi-sig treasury wallet (3/5)
-- Height-based consensus changes
+Beiträge sind willkommen! Öffne ein Issue oder sende einen Pull Request.
 
-## 📈 Roadmap
+## 📧 Kontakt
 
-- [x] Core blockchain implementation
-- [x] RandomX CPU mining
-- [x] Network fee system
-- [x] Treasury management
-- [x] P2P networking
-- [x] JSON-RPC API
-- [x] Explorer web interface
-- [x] Docker support
-- [x] Cross-compilation
-- [ ] Governance system
-- [ ] Mobile wallet
-- [ ] Hardware wallet support
+- **GitHub**: https://github.com/Why-x-Phy/kalon-network
+- **Issues**: https://github.com/Why-x-Phy/kalon-network/issues
 
-## 🤝 Contributing
+---
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
-## 🌍 Community
-
-- Website: https://kalon.network
-- Discord: https://discord.gg/kalon
-- Twitter: @KalonNetwork
-- GitHub: https://github.com/kalon-network/kalon
+**Status**: ✅ Funktionierend | Testnet | v2.0

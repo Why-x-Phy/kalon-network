@@ -1,6 +1,0 @@
-Bitte auf dem Server ausführen:
-
-# Logs prüfen
-tail -50 ~/kalon-network/node-v2.log | grep "DEBUG\|UTXO\|address"
-
-Das zeigt uns, welcher Address-String ankommt und wie er geparst wird.
