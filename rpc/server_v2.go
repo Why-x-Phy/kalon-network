@@ -248,12 +248,9 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 
 	// Create new block with rewards using CreateNewBlockV2
 	block := s.blockchain.CreateNewBlockV2(miner, []core.Transaction{})
-	log.Printf("🔍 DEBUG - Block created with %d transactions", len(block.Txs))
-	for i, tx := range block.Txs {
-		log.Printf("🔍 DEBUG - TX %d: %d outputs", i, len(tx.Outputs))
-		for j, output := range tx.Outputs {
-			log.Printf("🔍 DEBUG - Output %d: Address=%x, Amount=%d", j, output.Address, output.Amount)
-		}
+	log.Printf("🔍 Block created with %d transactions, miner: %x", len(block.Txs), miner)
+	if len(block.Txs) > 0 && len(block.Txs[0].Outputs) > 0 {
+		log.Printf("🔍 Reward TX Output: Address=%x, Amount=%d", block.Txs[0].Outputs[0].Address, block.Txs[0].Outputs[0].Amount)
 	}
 	if block == nil {
 		return &RPCResponse{
