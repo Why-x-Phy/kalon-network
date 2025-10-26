@@ -499,6 +499,8 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 						if outputMap, ok := outputData.(map[string]interface{}); ok {
 							output := core.TxOutput{}
 							if addressValue, ok := outputMap["address"]; ok {
+								// DEBUG: Log the address value type and content
+								log.Printf("🔍 DEBUG: Address value type=%T, value=%v", addressValue, addressValue)
 								// Parse address from various formats
 								if addressBytes, ok := addressValue.([]interface{}); ok && len(addressBytes) == 20 {
 									// Address als Array von Bytes
