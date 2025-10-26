@@ -447,8 +447,28 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 					for _, outputData := range outputs {
 						if outputMap, ok := outputData.(map[string]interface{}); ok {
 							output := core.TxOutput{}
-							if addressStr, ok := outputMap["address"].(string); ok {
-								output.Address = core.AddressFromString(addressStr)
+							if addressValue, ok := outputMap["address"]; ok {
+								// Address can be string OR bytes
+								var addressBytes []byte
+								if addressStr, ok := addressValue.(string); ok {
+									// Try to decode as hex string
+									if decoded, err := hex.DecodeString(addressStr); err == nil && len(decoded) == 20 {
+										addressBytes = decoded
+										log.Printf("🔍 DEBUG - Parsed hex address: %s", addressStr)
+									} else {
+										// Use AddressFromString for kalon1 format
+										addr := core.AddressFromString(addressStr)
+										addressBytes = addr[:]
+										log.Printf("🔍 DEBUG - Parsed kalon1 address: %s -> %x", addressStr, addressBytes)
+									}
+								} else if addressBytesRaw, ok := addressValue.([]byte); ok {
+									addressBytes = addressBytesRaw
+									log.Printf("🔍 DEBUG - Got bytes address: %x", addressBytes)
+								}
+								
+								if len(addressBytes) == 20 {
+									copy(output.Address[:], addressBytes)
+								}
 							}
 							if amount, ok := outputMap["amount"].(float64); ok {
 								output.Amount = uint64(amount)
