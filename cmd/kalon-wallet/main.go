@@ -125,8 +125,24 @@ func handleCreate(wm *WalletManager, args []string) {
 	output := fs.String("output", "", "Output file for wallet (overrides name)")
 	fs.Parse(args)
 	
-	// If no custom output specified, use name-based file
-	if *output == "" && *name != "" {
+	reader := bufio.NewReader(os.Stdin)
+	
+	// If no custom output specified, ask for name
+	if *output == "" && *name == "" {
+		fmt.Print("Enter wallet name (leave empty for 'wallet.json'): ")
+		nameInput, err := reader.ReadString('\n')
+		if err != nil {
+			log.Fatalf("Failed to read wallet name: %v", err)
+		}
+		nameInput = strings.TrimSpace(nameInput)
+		
+		if nameInput != "" {
+			*name = nameInput
+			*output = fmt.Sprintf("wallet-%s.json", *name)
+		} else {
+			*output = "wallet.json"
+		}
+	} else if *output == "" && *name != "" {
 		*output = fmt.Sprintf("wallet-%s.json", *name)
 	} else if *output == "" {
 		*output = "wallet.json"
@@ -135,7 +151,6 @@ func handleCreate(wm *WalletManager, args []string) {
 	// Get passphrase if not provided
 	if *passphrase == "" {
 		fmt.Print("Enter passphrase (optional): ")
-		reader := bufio.NewReader(os.Stdin)
 		pass, err := reader.ReadString('\n')
 		if err != nil {
 			log.Fatalf("Failed to read passphrase: %v", err)
