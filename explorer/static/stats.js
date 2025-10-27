@@ -24,7 +24,7 @@ async function loadStats() {
             document.getElementById('statDifficulty').textContent = formatNumber(stats.network.difficulty);
             document.getElementById('statPeers').textContent = stats.network.peers || 0;
             document.getElementById('statTotalTxs').textContent = stats.transactions.total || 0;
-            document.getElementById('statPendingTxs').textContent = stats.transгииюactions.pending || 0;
+            document.getElementById('statPendingTxs').textContent = stats.transactions.pending || 0;
             document.getElementById('statAddresses').textContent = stats.addresses.total || 0;
             document.getElementById('treasuryBalance').textContent = formatBalance(stats.treasury.balance);
         }
