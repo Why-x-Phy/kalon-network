@@ -11,9 +11,12 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #0a0a0a;
+  background-color: #0f0f0f;
+  background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
   color: #ffffff;
   line-height: 1.6;
+  margin: 0;
+  padding: 0;
 }
 
 code {
@@ -31,22 +34,26 @@ code {
 /* Typography */
 h1, h2, h3, h4, h5, h6 {
   margin-bottom: 1rem;
-  font-weight: 600;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 h1 {
-  font-size: 2.5rem;
-  color: #00d4ff;
+  font-size: 3rem;
+  color: #ffffff;
+  font-weight: 800;
 }
 
 h2 {
-  font-size: 2rem;
+  font-size: 2.5rem;
   color: #ffffff;
+  font-weight: 700;
 }
 
 h3 {
   font-size: 1.5rem;
   color: #cccccc;
+  font-weight: 600;
 }
 
 p {
@@ -58,7 +65,7 @@ p {
 a {
   color: #00d4ff;
   text-decoration: none;
-  transition: color 0.2s ease;
+  transition: all 0.2s ease;
 }
 
 a:hover {
@@ -66,25 +73,70 @@ a:hover {
   text-decoration: underline;
 }
 
-/* Buttons */
+/* Modern stat cards like Virel */
+.stat-card {
+  background: linear-gradient(135deg, #1a1a1a 0%, #252525 100%);
+  border: 1px solid #2a2a2a;
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 24px;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+}
+
+.stat-card:hover {
+  border-color: #00d4ff;
+  transform: translateY(-4px);
+  box-shadow: 0 8px 32px rgba(0, 212, 255, 0.15);
+}
+
+.stat-label {
+  font-size: 14px;
+  color: #888888;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.stat-value {
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: #00d4ff;
+  letter-spacing: -0.03em;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  margin-bottom: 48px;
+}
+
+/* Modern Buttons - Virel Style */
 .btn {
   display: inline-block;
-  padding: 12px 24px;
+  padding: 14px 28px;
   background: linear-gradient(135deg, #00d4ff, #0099cc);
   color: white;
   border: none;
-  border-radius: 8px;
-  font-size: 16px;
-  font-weight: 500;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
   text-decoration: none;
+  letter-spacing: 0.3px;
 }
 
 .btn:hover {
   background: linear-gradient(135deg, #00b8e6, #0088bb);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 212, 255, 0.3);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0, 212, 255, 0.4);
+}
+
+.btn:active {
+  transform: translateY(-1px);
 }
 
 .btn:active {
@@ -110,20 +162,22 @@ a:hover {
   color: white;
 }
 
-/* Cards */
+/* Cards - Modern Virel style */
 .card {
-  background: #1a1a1a;
-  border: 1px solid #333333;
-  border-radius: 12px;
-  padding: 24px;
-  margin-bottom: 24px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s ease;
+  background: linear-gradient(135deg, #1a1a1a 0%, #252525 100%);
+  border: 1px solid #2a2a2a;
+  border-radius: 16px;
+  padding: 32px;
+  margin-bottom: 32px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
 }
 
 .card:hover {
   border-color: #00d4ff;
-  box-shadow: 0 8px 25px rgba(0, 212, 255, 0.1);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0, 212, 255, 0.2);
 }
 
 .card-header {
@@ -143,36 +197,57 @@ a:hover {
   color: #cccccc;
 }
 
-/* Tables */
+/* Modern Tables - Virel Style */
 .table {
   width: 100%;
   border-collapse: collapse;
-  margin-top: 16px;
+  margin-top: 24px;
+  background: transparent;
 }
 
 .table th,
 .table td {
-  padding: 12px 16px;
+  padding: 16px 20px;
   text-align: left;
-  border-bottom: 1px solid #333333;
+  border-bottom: 1px solid #2a2a2a;
 }
 
 .table th {
-  background: #2a2a2a;
-  color: #ffffff;
-  font-weight: 600;
-  font-size: 14px;
+  background: transparent;
+  color: #888888;
+  font-weight: 700;
+  font-size: 13px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
+  font-weight: 600;
+  border-bottom: 2px solid #333333;
 }
 
 .table td {
-  color: #cccccc;
-  font-size: 14px;
+  color: #ffffff;
+  font-size: 15px;
+  font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Roboto Mono', monospace;
 }
 
 .table tr:hover {
-  background: #2a2a2a;
+  background: rgba(0, 212, 255, 0.05);
+}
+
+.table tr {
+  transition: background 0.2s ease;
+}
+
+/* Clickable hash/address */
+.hash-link {
+  color: #00d4ff;
+  font-family: monospace;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.hash-link:hover {
+  color: #00b8e6;
+  text-decoration: underline;
 }
 
 /* Forms */
