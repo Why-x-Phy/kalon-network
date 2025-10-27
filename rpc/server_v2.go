@@ -129,6 +129,8 @@ func (s *ServerV2) handleRPCMethod(req *RPCRequest) *RPCResponse {
 		return s.handleGetMiningInfo(req)
 	case "getBalance":
 		return s.handleGetBalance(req)
+	case "sendTransaction":
+		return s.handleSendTransaction(req)
 	default:
 		return &RPCResponse{
 			JSONRPC: "2.0",
@@ -658,6 +660,66 @@ func (s *ServerV2) handleGetBalance(req *RPCRequest) *RPCResponse {
 		JSONRPC: "2.0",
 		Result:  balance,
 		ID:      req.ID,
+	}
+}
+
+// handleSendTransaction handles sendTransaction requests
+func (s *ServerV2) handleSendTransaction(req *RPCRequest) *RPCResponse {
+	params, ok := req.Params.(map[string]interface{})
+	if !ok {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid params",
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Parse transaction fields
+	fromStr, _ := params["from"].(string)
+	toStr, _ := params["to"].(string)
+	amount, _ := params["amount"].(float64)
+	fee, _ := params["fee"].(float64)
+	
+	if fromStr == "" || toStr == "" || amount == 0 {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid params",
+				Data:    "from, to and amount are required",
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Create transaction
+	tx := core.Transaction{
+		From:      core.AddressFromString(fromStr),
+		To:        core.AddressFromString(toStr),
+		Amount:    uint64(amount),
+		Fee:       uint64(fee),
+		Timestamp: time.Now(),
+		Inputs:    []core.TxInput{},
+		Outputs:   []core.TxOutput{},
+	}
+
+	// Calculate transaction hash
+	tx.Hash = tx.CalculateHash()
+
+	log.Printf("📤 Transaction received - From: %s, To: %s, Amount: %d", fromStr, toStr, tx.Amount)
+
+	// TODO: Add to mempool and include in next block
+	// For now, just return success
+	return &RPCResponse{
+		JSONRPC: "2.0",
+		Result: map[string]interface{}{
+			"txHash": hex.EncodeToString(tx.Hash[:]),
+			"status": "pending",
+		},
+		ID: req.ID,
 	}
 }
 
