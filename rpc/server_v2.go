@@ -432,6 +432,13 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 			if txMap, ok := txData.(map[string]interface{}); ok {
 				// Parse transaction from map
 				tx := core.Transaction{}
+				
+				// IMPORTANT: Parse transaction hash FIRST so it's available
+				if hashStr, ok := txMap["hash"].(string); ok {
+					if hashBytes, err := hex.DecodeString(hashStr); err == nil {
+						copy(tx.Hash[:], hashBytes)
+					}
+				}
 
 				// Parse From address
 				if fromStr, ok := txMap["from"].(string); ok {
@@ -467,12 +474,6 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 				if signature, ok := txMap["signature"].([]byte); ok {
 					tx.Signature = signature
 				}
-				if hashStr, ok := txMap["hash"].(string); ok {
-					if hashBytes, err := hex.DecodeString(hashStr); err == nil {
-						copy(tx.Hash[:], hashBytes)
-					}
-				}
-
 				// Parse UTXO fields
 				if inputs, ok := txMap["inputs"].([]interface{}); ok {
 					for _, inputData := range inputs {
