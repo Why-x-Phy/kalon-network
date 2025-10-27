@@ -59,11 +59,11 @@ function renderBlocks(blocks) {
         return;
     }
     
-    tbody.innerHTML = blocks.map(block => `
+            tbody.innerHTML = blocks.map(block => `
         <tr>
             <td>#${block.number}</td>
             <td>
-                <a href="#" class="hash-link" data-hash="${block.hash}">
+                <a href="block.html?h=${formatHash(block.hash)}" class="hash-link">
                     ${formatHash(block.hash)}
                 </a>
             </td>
@@ -71,15 +71,6 @@ function renderBlocks(blocks) {
             <td>${formatAge(block.timestamp)}</td>
         </tr>
     `).join('');
-    
-    // Add click handlers
-    document.querySelectorAll('.hash-link').forEach(link => {
-        link.addEventListener('click', (e) => {
-            e.preventDefault();
-            const hash = e.target.dataset.hash;
-            viewBlock(hash);
-        });
-    });
 }
 
 // Render mock blocks (fallback)
@@ -119,10 +110,7 @@ function formatHashrate(hashRate) {
     return `${(hashRate / 1000000).toFixed(2)} MH/s`;
 }
 
-// View block details
-function viewBlock(hash) {
-    alert(`Block details for: ${hash}\n\n(Block detail view would be implemented here)`);
-}
+// View block details (now handled by block.html)
 
 // Initialize on page load
 init();

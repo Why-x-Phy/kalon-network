@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stats - Kalon Explorer</title>
+    <link rel="stylesheet" href="style.css transient">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="logo">
+                <h1><a href="index.html" style="color: inherit; text-decoration: none;">Kalon Explorer</a></h1>
+            </div>
+            <nav class="nav">
+                <a href="index.html">Explorer</a>
+                <a href="stats.html" class="active">Stats</a>
+            </nav>
+            <div class="search">
+                <input type="text" placeholder="Search blocks, transactions or wallet addresses">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <section class="content">
+        <div class="container">
+            <h2 class="section-title">Network Statistics</h2>
+            
+            <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr);">
+                <div class="stat-card">
+                    <div class="stat-label">HEIGHT</div>
+                    <div class="stat-value" id="statHeight">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">HASHRATE</div>
+                    <div class="stat-value" id="statHashrate">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">REWARD</div>
+                    <div class="stat-value" id="statReward">5.00 tKALON</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">TOTAL BLOCKS</div>
+                    <div class="stat-value" id="statTotalBlocks">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">DIFFICULTY</div>
+                    <div class="stat-value" id="statDifficulty">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">PEERS</div>
+                    <div class="stat-value" id="statPeers">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">TOTAL TXS</div>
+                    <div class="stat-value" id="statTotalTxs">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">PENDING TXS</div>
+                    <div class="stat-value" id="statPendingTxs">-</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">ADDRESSES</div>
+                    <div class="stat-value" id="statAddresses">-</div>
+                </div>
+            </div>
+
+            <div class="stat-card" style="margin-top: 32px;">
+                <div class="stat-label">TREASURY BALANCE</div>
+                <div class="stat-value" id="treasuryBalance">-</div>
+            </div>
+        </div>
+    </section>
+
+    <script src="stats.js"></script>
+</body>
+</html>
