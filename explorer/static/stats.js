@@ -11,7 +11,7 @@ async function init() {
 // Load network stats
 async function loadStats() {
     try {
-        const response = await fetch(`${API_BASE}/stats`);
+        const response = await fetch(`${API_BASE}/network/stats`);
         const data = await response.json();
         
         if (data.success) {

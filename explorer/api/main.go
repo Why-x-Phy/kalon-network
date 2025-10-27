@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -249,22 +252,28 @@ func (api *ExplorerAPI) handleGetBlocks(w http.ResponseWriter, r *http.Request) 
 
 // handleGetLatestBlock handles get latest block requests
 func (api *ExplorerAPI) handleGetLatestBlock(w http.ResponseWriter, r *http.Request) {
-	// Mock data
+	// Call RPC to get real data
+	rpcResp, err := api.callRPC("getBestBlock", nil)
+	if err != nil {
+		api.writeError(w, http.StatusInternalServerError, "Failed to fetch block")
+		return
+	}
+
+	// Parse result
+	result, ok := rpcResp["result"].(map[string]interface{})
+	if !ok {
+		api.writeError(w, http.StatusInternalServerError, "Invalid block data")
+		return
+	}
+
+	height, _ := result["number"].(float64)
+	hash, _ := result["hash"].(string)
+
 	block := Block{
-		Hash:        "0x1234567890abcdef",
-		Number:      1,
-		ParentHash:  "0x0000000000000000",
-		Timestamp:   time.Now().Add(-1 * time.Hour),
-		Difficulty:  1000,
-		Miner:       "kalon1miner123456789",
-		Nonce:       12345,
-		MerkleRoot:  "0xabcdef1234567890",
-		TxCount:     5,
-		NetworkFee:  250000,
-		TreasuryFee: 250000,
-		Size:        1024,
-		GasUsed:     21000,
-		GasLimit:    1000000,
+		Hash:      hash,
+		Number:    uint64(height),
+		Timestamp: time.Now(),
+		TxCount:   1,
 	}
 
 	response := APIResponse{
@@ -511,10 +520,17 @@ func (api *ExplorerAPI) handleGetTreasury(w http.ResponseWriter, r *http.Request
 
 // handleGetNetworkStats handles get network stats requests
 func (api *ExplorerAPI) handleGetNetworkStats(w http.ResponseWriter, r *http.Request) {
-	// Mock data
+	// Get real height
+	rpcResp, _ := api.callRPC("getHeight", nil)
+	height := uint64(0)
+	if result, ok := rpcResp["result"].(float64); ok {
+		height = uint64(result)
+	}
+
+	// Mock data (partially real)
 	stats := NetworkStats{
-		BlockHeight:     1,
-		TotalBlocks:     1,
+		BlockHeight:     height,
+		TotalBlocks:     height,
 		TotalTxs:        5,
 		TotalAddresses:  10,
 		NetworkHashRate: 1000.0,
@@ -647,11 +663,52 @@ func (api *ExplorerAPI) writeError(w http.ResponseWriter, status int, message st
 	api.writeJSON(w, status, response)
 }
 
+// callRPC makes an RPC call to the node
+func (api *ExplorerAPI) callRPC(method string, params map[string]interface{}) (map[string]interface{}, error) {
+	// Create RPC request
+	reqData := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"method":  method,
+		"id":      1,
+	}
+
+	if params != nil {
+		reqData["params"] = params
+	}
+
+	// Marshal request
+	jsonData, err := json.Marshal(reqData)
+	if err != nil {
+		return nil, err
+	}
+
+	// Make HTTP request
+	resp, err := http.Post(api.rpcURL+"/rpc", "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	// Read response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	// Parse response
+	var rpcResp map[string]interface{}
+	if err := json.Unmarshal(body, &rpcResp); err != nil {
+		return nil, err
+	}
+
+	return rpcResp, nil
+}
+
 func main() {
 	// Get configuration from environment
 	rpcURL := os.Getenv("KALON_RPC_URL")
 	if rpcURL == "" {
-		rpcURL = "http://localhost:16314"
+		rpcURL = "http://localhost:16316" // CORRECT PORT!
 	}
 
 	port := os.Getenv("KALON_API_ADDR")
