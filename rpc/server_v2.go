@@ -506,8 +506,17 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 								
 								// Try to parse as string (40-char hex or kalon1... format)
 								if addressStr, ok := addressValue.(string); ok {
-									address = core.AddressFromString(addressStr)
-									addressSet = true
+									// If it's a hex-encoded address (like from Miner)
+									if len(addressStr) == 40 && isHexString(addressStr) {
+										if decoded, err := hex.DecodeString(addressStr); err == nil && len(decoded) == 20 {
+											copy(address[:], decoded)
+											addressSet = true
+										}
+									} else {
+										// Use AddressFromString for other formats
+										address = core.AddressFromString(addressStr)
+										addressSet = true
+									}
 								}
 								
 								// Try to parse as array of numbers
@@ -727,4 +736,14 @@ func (s *ServerV2) cleanupConnections() {
 			return
 		}
 	}
+}
+
+// Helper function to check if string is hex
+func isHexString(s string) bool {
+	for _, c := range s {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
 }
