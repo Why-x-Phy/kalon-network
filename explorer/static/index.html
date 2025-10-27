@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kalon Explorer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="logo">
+                <h1>Kalon Explorer</h1>
+            </div>
+            <nav class="nav">
+                <a href="#" class="active">Explorer</a>
+                <a href="#stats">Stats</a>
+            </nav>
+            <div class="search">
+                <input type="text" placeholder="Search blocks, transactions or wallet addresses">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Stats -->
+    <section class="stats-overview">
+        <div class="container">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-label">HEIGHT</div>
+                    <div class="stat-value" id="blockHeight">Loading...</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">HASHRATE</div>
+                    <div class="stat-value" id="hashrate">0 MH/s</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">REWARD</div>
+                    <div class="stat-value" id="reward">5.00 tKALON</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Recent Blocks -->
+    <section class="content">
+        <div class="container">
+            <h2 class="section-title">Recent blocks</h2>
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Height</th>
+                            <th>Hash</th>
+                            <th>Transactions</th>
+                            <th>Age</th>
+                        </tr>
+                    </thead>
+                    <tbody id="blocksTable">
+                        <tr>
+                            <td colspan="4" style="text-align: center; padding: 40px;">
+                                <div class="loading">Loading blocks...</div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <script src="app.js"></script>
+</body>
+</html>

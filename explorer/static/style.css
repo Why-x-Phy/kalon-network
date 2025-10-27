@@ -1,0 +1,255 @@
+/* Reset & Base */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;
+    background: #0f0f0f;
+    background-image: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
+    color: #ffffff;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 32px;
+}
+
+/* Header */
+.header {
+    background: rgba(15, 15, 15, 0.95);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid #2a2a2a;
+    padding: 20px 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.header .container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 32px;
+}
+
+.logo h1 {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: #fff;
+}
+
+.nav {
+    display: flex;
+    gap: 24px;
+}
+
+.nav a {
+    color: #888;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 15px;
+    transition: color 0.2s;
+}
+
+.nav a.active {
+    color: #00d4ff;
+}
+
+.nav a:hover {
+    color: #00d4ff;
+}
+
+.search {
+    position: relative;
+    flex: 1;
+    max-width: 500px;
+}
+
+.search input {
+    width: 100%;
+    padding: 12px 16px 12px 48px;
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 12px;
+    color: #fff;
+    font-size: 14px;
+    transition: all 0.3s ease;
+}
+
+.search input:focus {
+    outline: none;
+    border-color: #00d4ff;
+    box-shadow: 0 0 0 4px rgba(0, 212, 255, 0.1);
+}
+
+.search-icon {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    color: #666;
+}
+
+/* Stats Overview */
+.stats-overview {
+    padding: 48px 0;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 24px;
+}
+
+.stat-card {
+    background: linear-gradient(135deg, #1a1a1a 0%, #252525 100%);
+    border: 1px solid #2a2a2a;
+    border-radius: 16px;
+    padding: 32px;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+}
+
+.stat-card:hover {
+    border-color: #00d4ff;
+    transform: translateY(-4px);
+    box-shadow: 0 8px 32px rgba(0, 212, 255, 0.15);
+}
+
+.stat-label {
+    font-size: 13px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 700;
+    margin-bottom: 12px;
+}
+
+.stat-value {
+    font-size: 36px;
+    font-weight: 800;
+    color: #00d4ff;
+    letter-spacing: -0.03em;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+}
+
+/* Content */
+.content {
+    padding: 32px 0 80px;
+}
+
+.section-title {
+    font-size: 28px;
+    font-weight: 800;
+    margin-bottom: 24px;
+    color: #fff;
+    letter-spacing: -0.5px;
+}
+
+.table-container {
+    background: rgba(26, 26, 26, 0.8);
+    border: 1px solid #2a2a2a;
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table th,
+.table td {
+    padding: 20px 24px;
+    text-align: left;
+    border-bottom: 1px solid #2a2a2a;
+}
+
+.table th {
+    background: transparent;
+    color: #888;
+    font-weight: 700;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 2px solid #333;
+}
+
+.table td {
+    color: #fff;
+    font-size: 15px;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+}
+
+.table tr {
+    transition: background 0.2s ease;
+}
+
+.table tr:hover {
+    background: rgba(0, 212, 255, 0.05);
+}
+
+.table tr:last-child td {
+    border-bottom: none;
+}
+
+.hash-link {
+    color: #00d4ff;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.hash-link:hover {
+    color: #00b8e6;
+    text-decoration: underline;
+}
+
+/* Loading */
+.loading {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    color: #666;
+}
+
+.loading::before {
+    content: '';
+    width: 20px;
+    height: 20px;
+    border: 3px solid #333;
+    border-top-color: #00d4ff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .header .container {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .search {
+        width: 100%;
+        max-width: 100%;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+}
