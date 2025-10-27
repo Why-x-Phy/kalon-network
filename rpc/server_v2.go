@@ -499,36 +499,34 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 						if outputMap, ok := outputData.(map[string]interface{}); ok {
 							output := core.TxOutput{}
 							if addressValue, ok := outputMap["address"]; ok {
-								// DEBUG: Log the address value type and content
-								log.Printf("🔍 DEBUG: Address value type=%T, value=%v", addressValue, addressValue)
 								// Parse address from various formats
-								if addressBytes, ok := addressValue.([]interface{}); ok && len(addressBytes) == 20 {
-									// Address als Array von Bytes
-									var addrBytes []byte
-									for _, b := range addressBytes {
-										if byteVal, ok := b.(float64); ok {
-											addrBytes = append(addrBytes, byte(byteVal))
+								var address core.Address
+								addressSet := false
+								
+								// Try to parse as string (40-char hex or kalon1... format)
+								if addressStr, ok := addressValue.(string); ok {
+									address = core.AddressFromString(addressStr)
+									addressSet = true
+								}
+								
+								// Try to parse as array of numbers
+								if !addressSet {
+									if addressBytes, ok := addressValue.([]interface{}); ok && len(addressBytes) == 20 {
+										var addrBytes []byte
+										for _, b := range addressBytes {
+											if byteVal, ok := b.(float64); ok {
+												addrBytes = append(addrBytes, byte(byteVal))
+											}
+										}
+										if len(addrBytes) == 20 {
+											copy(address[:], addrBytes)
+											addressSet = true
 										}
 									}
-									if len(addrBytes) == 20 {
-										copy(output.Address[:], addrBytes)
-										log.Printf("✅ Parsed array address: %x", output.Address)
-									}
-								} else if addressStr, ok := addressValue.(string); ok {
-									// If it's 40 hex chars, decode directly
-									if len(addressStr) == 40 {
-										if decoded, err := hex.DecodeString(addressStr); err == nil && len(decoded) == 20 {
-											copy(output.Address[:], decoded)
-											log.Printf("✅ Parsed hex address: %s -> %x", addressStr[:20]+"...", output.Address)
-										}
-									} else {
-										// Use AddressFromString for other formats (including Bech32)
-										output.Address = core.AddressFromString(addressStr)
-										log.Printf("✅ Used AddressFromString: %s -> %x", addressStr, output.Address)
-									}
-								} else if addressBytes, ok := addressValue.([]byte); ok && len(addressBytes) == 20 {
-									copy(output.Address[:], addressBytes)
-									log.Printf("✅ Parsed bytes address: %x", output.Address)
+								}
+								
+								if addressSet {
+									output.Address = address
 								}
 							}
 							if amount, ok := outputMap["amount"].(float64); ok {
