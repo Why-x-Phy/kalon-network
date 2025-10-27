@@ -52,8 +52,14 @@ pkill -f kalon
 
 ## 📚 Vollständige Dokumentation
 
-- [Installation](INSTALLATION.md) - Detaillierte Installation
-- [Running a Node](RUNNING_A_NODE.md) - Set up your own node and sync with the network
-- [Update](UPDATE.md) - Updates durchführen
-- [API](API.md) - RPC API Dokumentation
+### For Users
+- [User Guide](USER_GUIDE.md) - Complete user guide for running nodes and mining
+- [Running a Node](RUNNING_A_NODE.md) - Detailed node setup instructions
+- [Command Reference](COMMAND_REFERENCE.md) - All available commands
+
+### For Administrators
+- [Admin Guide](ADMIN_GUIDE.md) - System administration and maintenance
+- [Installation](INSTALLATION.md) - Detailed installation guide
+- [Update](UPDATE.md) - Update procedures
+- [API](API.md) - RPC API documentation
 
