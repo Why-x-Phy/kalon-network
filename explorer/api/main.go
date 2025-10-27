@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -521,10 +520,17 @@ func (api *ExplorerAPI) handleGetTreasury(w http.ResponseWriter, r *http.Request
 // handleGetNetworkStats handles get network stats requests
 func (api *ExplorerAPI) handleGetNetworkStats(w http.ResponseWriter, r *http.Request) {
 	// Get real height
-	rpcResp, _ := api.callRPC("getHeight", nil)
+	rpcResp, err := api.callRPC("getHeight", nil)
 	height := uint64(0)
-	if result, ok := rpcResp["result"].(float64); ok {
-		height = uint64(result)
+	if err == nil {
+		if result, ok := rpcResp["result"].(float64); ok {
+			height = uint64(result)
+			log.Printf("✅ Got real height: %d", height)
+		} else {
+			log.Printf("⚠️ No result in RPC response: %v", rpcResp)
+		}
+	} else {
+		log.Printf("❌ RPC call failed: %v", err)
 	}
 
 	// Mock data (partially real)
