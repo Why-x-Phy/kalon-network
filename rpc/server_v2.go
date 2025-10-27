@@ -205,7 +205,7 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 
 	// Parse miner address - handle kalon1 + hex format
 	var miner core.Address
-	
+
 	if strings.HasPrefix(minerStr, "kalon1") {
 		// Remove "kalon1" prefix and decode hex
 		hexStr := strings.TrimPrefix(minerStr, "kalon1")
@@ -219,8 +219,8 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 				log.Printf("❌ Failed to decode kalon1+hex: %v", err)
 				return &RPCResponse{
 					JSONRPC: "2.0",
-					Error: &RPCError{Code: -32602, Message: "Invalid miner address"},
-					ID: req.ID,
+					Error:   &RPCError{Code: -32602, Message: "Invalid miner address"},
+					ID:      req.ID,
 				}
 			}
 		} else {
@@ -228,8 +228,8 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 			log.Printf("❌ Invalid: kalon1 address has wrong length: %d", len(hexStr))
 			return &RPCResponse{
 				JSONRPC: "2.0",
-				Error: &RPCError{Code: -32602, Message: "Invalid miner address format"},
-				ID: req.ID,
+				Error:   &RPCError{Code: -32602, Message: "Invalid miner address format"},
+				ID:      req.ID,
 			}
 		}
 	} else {
@@ -243,16 +243,16 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 				log.Printf("❌ Invalid address format: %s", minerStr)
 				return &RPCResponse{
 					JSONRPC: "2.0",
-					Error: &RPCError{Code: -32602, Message: "Invalid miner address format"},
-					ID: req.ID,
+					Error:   &RPCError{Code: -32602, Message: "Invalid miner address format"},
+					ID:      req.ID,
 				}
 			}
 		} else {
 			log.Printf("❌ Invalid address format: %s (len=%d)", minerStr, len(minerStr))
 			return &RPCResponse{
 				JSONRPC: "2.0",
-				Error: &RPCError{Code: -32602, Message: "Invalid miner address format"},
-				ID: req.ID,
+				Error:   &RPCError{Code: -32602, Message: "Invalid miner address format"},
+				ID:      req.ID,
 			}
 		}
 	}
@@ -432,7 +432,7 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 			if txMap, ok := txData.(map[string]interface{}); ok {
 				// Parse transaction from map
 				tx := core.Transaction{}
-				
+
 				// IMPORTANT: Parse transaction hash FIRST so it's available
 				if hashStr, ok := txMap["hash"].(string); ok {
 					if hashBytes, err := hex.DecodeString(hashStr); err == nil {
@@ -503,7 +503,7 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 								// Parse address from various formats
 								var address core.Address
 								addressSet := false
-								
+
 								// Try to parse as string (40-char hex or kalon1... format)
 								if addressStr, ok := addressValue.(string); ok {
 									// If it's a hex-encoded address (like from Miner)
@@ -518,7 +518,7 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 										addressSet = true
 									}
 								}
-								
+
 								// Try to parse as array of numbers
 								if !addressSet {
 									if addressBytes, ok := addressValue.([]interface{}); ok && len(addressBytes) == 20 {
@@ -534,7 +534,7 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 										}
 									}
 								}
-								
+
 								if addressSet {
 									output.Address = address
 								}
@@ -554,8 +554,13 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 					}
 				}
 
+				// Calculate transaction hash if not set
+				if tx.Hash == (core.Hash{}) {
+					tx.Hash = core.CalculateTransactionHash(&tx)
+				}
+
 				transactions = append(transactions, tx)
-				log.Printf("💰 Parsed transaction with %d outputs, total amount: %d", len(tx.Outputs), tx.Amount)
+				log.Printf("💰 Parsed transaction with %d outputs, total amount: %d, hash: %x", len(tx.Outputs), tx.Amount, tx.Hash)
 			}
 		}
 	} else {
