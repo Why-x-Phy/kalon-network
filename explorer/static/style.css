@@ -256,7 +256,7 @@ body {
     border-bottom: none;
 }
 
-.detail-label modern {
+.detail-label {
     font-size: 13px;
     color: #888;
     text-transform: uppercase;

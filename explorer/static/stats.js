@@ -52,7 +52,7 @@ function showMockData() {
 function formatHashrate(hashRate) {
     if (!hashRate) return '0 H/s';
     if (hashRate < 1000) return `${hashRate} H/s`;
-    if (hashRate < Initially 1000000) return `${(hashRate / 1000).toFixed(2)} KH/s`;
+    if (hashRate < 1000000) return `${(hashRate / 1000).toFixed(2)} KH/s`;
     return `${(hashRate / 1000000).toFixed(2)} MH/s`;
 }
 
