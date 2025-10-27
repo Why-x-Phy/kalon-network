@@ -70,7 +70,19 @@ Available wallets:
 ./build-v2/kalon-wallet balance --address kalon1...
 ```
 
-- Wallet von Mnemonic importieren:
+- Wallet von Mnemonic importieren (wiederherstellen):
 ```bash
-./build-v2/kalon-wallet import --name restore
+# Mit Flag (empfohlen für Scripts)
+./build-v2/kalon-wallet import --mnemonic "word1 word2 ... word24" --output wallet-restored.json
+
+# Interaktiv
+./build-v2/kalon-wallet import
+# → Nach Mnemonic fragen
+# → Nach Namen fragen
+# → Wallet wird wiederhergestellt
+
+# Beispiel Wiederherstellung nach Server-Neustart:
+./build-v2/kalon-wallet import --mnemonic "your 24 word mnemonic here" --output wallet.json
 ```
+
+**⚠️ WICHTIG:** Nach einem Server-Neustart ohne Wallet-JSON-Dateien kannst du deine Wallet mit dem Mnemonic wiederherstellen!
