@@ -3,28 +3,35 @@ const API_BASE = 'http://localhost:8081';
 
 // Load initial data
 async function init() {
-    await loadStats();
+    await loadNetworkStats();
     await loadBlocks();
     // Auto-refresh every 10 seconds
-    setInterval(loadBlocks, 10000);
+    setInterval(() => {
+        loadNetworkStats();
+        loadBlocks();
+    }, 10000);
 }
 
 // Load network stats
-async function loadStats() {
+async function loadNetworkStats() {
     try {
-        const response = await fetch(`${API_BASE}/stats`);
+        const response = await fetch(`${API_BASE}/network/stats`);
         const data = await response.json();
         
         if (data.success) {
             const stats = data.data;
             
-            // Update stat cards
-            document.getElementById('blockHeight').textContent = stats.blocks.latest || 0;
-            document.getElementById('hashrate').textContent = formatHashrate(stats.network.hashRate);
-            document.getElementById('reward').textContent = '5.00 tKALON';
+            // Update all stat values
+            document.getElementById('statHeight').textContent = stats.blockHeight || 0;
+            document.getElementById('statHashrate').textContent = formatHashrate(stats.networkHashRate);
+            document.getElementById('statTotalBlocks').textContent = stats.totalBlocks || 0;
+            document.getElementById('statDifficulty').textContent = formatNumber(stats.difficulty);
+            document.getElementById('statPeers').textContent = stats.peers || 0;
+            document.getElementById('statTotalTxs').textContent = stats.totalTxs || 0;
+            document.getElementById('statPendingTxs').textContent = stats.mempoolSize || 0;
         }
     } catch (error) {
-        console.error('Error loading stats:', error);
+        console.error('Error loading network stats:', error);
     }
 }
 
@@ -105,9 +112,16 @@ function formatAge(timestamp) {
 
 // Format hashrate
 function formatHashrate(hashRate) {
+    if (!hashRate) return '0 H/s';
     if (hashRate < 1000) return `${hashRate} H/s`;
     if (hashRate < 1000000) return `${(hashRate / 1000).toFixed(2)} KH/s`;
     return `${(hashRate / 1000000).toFixed(2)} MH/s`;
+}
+
+// Format number
+function formatNumber(num) {
+    if (!num) return '0';
+    return num.toLocaleString();
 }
 
 // View block details (now handled by block.html)

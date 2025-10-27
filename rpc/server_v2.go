@@ -121,6 +121,8 @@ func (s *ServerV2) handleRPCMethod(req *RPCRequest) *RPCResponse {
 		return s.handleGetHeight(req)
 	case "getBestBlock":
 		return s.handleGetBestBlock(req)
+	case "getRecentBlocks":
+		return s.handleGetRecentBlocks(req)
 	case "createBlockTemplate":
 		return s.handleCreateBlockTemplateV2(req)
 	case "submitBlock":
@@ -175,6 +177,68 @@ func (s *ServerV2) handleGetBestBlock(req *RPCRequest) *RPCResponse {
 			"number": block.Header.Number,
 		},
 		ID: req.ID,
+	}
+}
+
+// handleGetRecentBlocks handles getRecentBlocks requests
+func (s *ServerV2) handleGetRecentBlocks(req *RPCRequest) *RPCResponse {
+	// Parse parameters
+	params, ok := req.Params.(map[string]interface{})
+	limit := 20 // Default limit
+
+	if ok {
+		if limitVal, ok := params["limit"].(float64); ok {
+			limit = int(limitVal)
+			if limit > 100 {
+				limit = 100
+			}
+			if limit < 1 {
+				limit = 1
+			}
+		}
+	}
+
+	// Get recent blocks
+	blocks := s.blockchain.GetRecentBlocks(limit)
+	if blocks == nil || len(blocks) == 0 {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Result:  []interface{}{},
+			ID:      req.ID,
+		}
+	}
+
+	// Convert blocks to JSON-compatible format
+	result := make([]map[string]interface{}, 0, len(blocks))
+	for _, block := range blocks {
+		txCount := uint32(len(block.Txs))
+		blockMap := map[string]interface{}{
+			"hash":        hex.EncodeToString(block.Hash[:]),
+			"number":      block.Header.Number,
+			"parentHash":  hex.EncodeToString(block.Header.ParentHash[:]),
+			"timestamp":   float64(block.Header.Timestamp.Unix()),
+			"difficulty":  block.Header.Difficulty,
+			"nonce":       block.Header.Nonce,
+			"merkleRoot":  hex.EncodeToString(block.Header.MerkleRoot[:]),
+			"txCount":     txCount,
+			"networkFee":  block.Header.NetworkFee,
+			"treasuryFee": block.Header.TreasuryFee,
+			"gasUsed":     uint64(0), // Not used in Kalon
+			"gasLimit":    uint64(0), // Not used in Kalon
+		}
+
+		// Add miner if available
+		if block.Header.Miner != (core.Address{}) {
+			blockMap["miner"] = block.Header.Miner.String()
+		}
+
+		result = append(result, blockMap)
+	}
+
+	return &RPCResponse{
+		JSONRPC: "2.0",
+		Result:  result,
+		ID:      req.ID,
 	}
 }
 
@@ -682,7 +746,7 @@ func (s *ServerV2) handleSendTransaction(req *RPCRequest) *RPCResponse {
 	toStr, _ := params["to"].(string)
 	amount, _ := params["amount"].(float64)
 	fee, _ := params["fee"].(float64)
-	
+
 	if fromStr == "" || toStr == "" || amount == 0 {
 		return &RPCResponse{
 			JSONRPC: "2.0",

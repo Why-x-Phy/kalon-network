@@ -11,16 +11,16 @@ import (
 
 // BlockchainV2 represents a professional blockchain implementation
 type BlockchainV2 struct {
-	mu             sync.RWMutex
-	blocks         []*Block
-	height         uint64
-	bestBlock      *Block
-	genesis        *GenesisConfig
-	consensus      *ConsensusV2
-	eventBus       *EventBus
-	stateManager   *StateManager
-	utxoSet        *UTXOSet
-	mempool        *Mempool
+	mu           sync.RWMutex
+	blocks       []*Block
+	height       uint64
+	bestBlock    *Block
+	genesis      *GenesisConfig
+	consensus    *ConsensusV2
+	eventBus     *EventBus
+	stateManager *StateManager
+	utxoSet      *UTXOSet
+	mempool      *Mempool
 }
 
 // Mempool manages pending transactions
@@ -209,7 +209,7 @@ func (bc *BlockchainV2) CreateTransaction(from Address, to Address, amount uint6
 	outputs := []TxOutput{
 		{Address: to, Amount: amount},
 	}
-	
+
 	// Add change output if needed
 	change := totalInput - amount - fee
 	if change > 0 {
@@ -308,6 +308,33 @@ func (bc *BlockchainV2) GetBestBlock() *Block {
 	bc.mu.RLock()
 	defer bc.mu.RUnlock()
 	return bc.bestBlock
+}
+
+// GetRecentBlocks returns the most recent blocks
+func (bc *BlockchainV2) GetRecentBlocks(limit int) []*Block {
+	bc.mu.RLock()
+	defer bc.mu.RUnlock()
+
+	if len(bc.blocks) == 0 {
+		return []*Block{}
+	}
+
+	// Get the last 'limit' blocks
+	start := len(bc.blocks) - limit
+	if start < 0 {
+		start = 0
+	}
+
+	// Create a slice in reverse order (newest first)
+	result := make([]*Block, 0, limit)
+	for i := len(bc.blocks) - 1; i >= start; i-- {
+		result = append(result, bc.blocks[i])
+		if len(result) >= limit {
+			break
+		}
+	}
+
+	return result
 }
 
 // GetHeight returns the current height thread-safely

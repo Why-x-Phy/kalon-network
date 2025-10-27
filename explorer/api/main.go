@@ -206,45 +206,86 @@ func (api *ExplorerAPI) handleHealth(w http.ResponseWriter, r *http.Request) {
 // handleGetBlocks handles get blocks requests
 func (api *ExplorerAPI) handleGetBlocks(w http.ResponseWriter, r *http.Request) {
 	// Parse query parameters
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-
-	if page <= 0 {
-		page = 1
-	}
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
 
-	// Mock data for now
-	blocks := []Block{
-		{
-			Hash:        "0x1234567890abcdef",
-			Number:      1,
-			ParentHash:  "0x0000000000000000",
-			Timestamp:   time.Now().Add(-1 * time.Hour),
-			Difficulty:  1000,
-			Miner:       "kalon1miner123456789",
-			Nonce:       12345,
-			MerkleRoot:  "0xabcdef1234567890",
-			TxCount:     5,
-			NetworkFee:  250000,
-			TreasuryFee: 250000,
-			Size:        1024,
-			GasUsed:     21000,
-			GasLimit:    1000000,
-		},
+	// Call RPC to get recent blocks
+	rpcResp, err := api.callRPC("getRecentBlocks", map[string]interface{}{
+		"limit": limit,
+	})
+
+	if err != nil || rpcResp == nil {
+		log.Printf("❌ Failed to get recent blocks: %v", err)
+		// Fallback to empty result
+		response := APIResponse{
+			Success: true,
+			Data:    []Block{},
+		}
+		api.writeJSON(w, http.StatusOK, response)
+		return
+	}
+
+	// Convert RPC result to Block format
+	rpcBlocks, ok := rpcResp["result"].([]interface{})
+	if !ok || len(rpcBlocks) == 0 {
+		response := APIResponse{
+			Success: true,
+			Data:    []Block{},
+		}
+		api.writeJSON(w, http.StatusOK, response)
+		return
+	}
+
+	blocks := make([]Block, 0, len(rpcBlocks))
+	for _, blockData := range rpcBlocks {
+		bd, ok := blockData.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		block := Block{
+			Number: uint64(bd["number"].(float64)),
+		}
+
+		// Convert fields
+		if hash, ok := bd["hash"].(string); ok {
+			block.Hash = hash
+		}
+		if parentHash, ok := bd["parentHash"].(string); ok {
+			block.ParentHash = parentHash
+		}
+		if miner, ok := bd["miner"].(string); ok {
+			block.Miner = miner
+		}
+		if nonce, ok := bd["nonce"].(float64); ok {
+			block.Nonce = uint64(nonce)
+		}
+		if difficulty, ok := bd["difficulty"].(float64); ok {
+			block.Difficulty = uint64(difficulty)
+		}
+		if txCount, ok := bd["txCount"].(float64); ok {
+			block.TxCount = uint32(txCount)
+		}
+		if networkFee, ok := bd["networkFee"].(float64); ok {
+			block.NetworkFee = uint64(networkFee)
+		}
+		if treasuryFee, ok := bd["treasuryFee"].(float64); ok {
+			block.TreasuryFee = uint64(treasuryFee)
+		}
+
+		// Parse timestamp
+		if timestamp, ok := bd["timestamp"].(float64); ok {
+			block.Timestamp = time.Unix(int64(timestamp), 0)
+		}
+
+		blocks = append(blocks, block)
 	}
 
 	response := APIResponse{
 		Success: true,
 		Data:    blocks,
-		Meta: &Meta{
-			Page:       page,
-			Limit:      limit,
-			Total:      1,
-			TotalPages: 1,
-		},
 	}
 	api.writeJSON(w, http.StatusOK, response)
 }

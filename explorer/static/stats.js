@@ -17,16 +17,16 @@ async function loadStats() {
         if (data.success) {
             const stats = data.data;
             
-            // Update all stat values
-            document.getElementById('statHeight').textContent = stats.blocks.latest || 0;
-            document.getElementById('statHashrate').textContent = formatHashrate(stats.network.hashRate);
-            document.getElementById('statTotalBlocks').textContent = stats.blocks.total || 0;
-            document.getElementById('statDifficulty').textContent = formatNumber(stats.network.difficulty);
-            document.getElementById('statPeers').textContent = stats.network.peers || 0;
-            document.getElementById('statTotalTxs').textContent = stats.transactions.total || 0;
-            document.getElementById('statPendingTxs').textContent = stats.transactions.pending || 0;
-            document.getElementById('statAddresses').textContent = stats.addresses.total || 0;
-            document.getElementById('treasuryBalance').textContent = formatBalance(stats.treasury.balance);
+            // Update all stat values (using correct API structure)
+            document.getElementById('statHeight').textContent = stats.blockHeight || 0;
+            document.getElementById('statHashrate').textContent = formatHashrate(stats.networkHashRate);
+            document.getElementById('statTotalBlocks').textContent = stats.totalBlocks || 0;
+            document.getElementById('statDifficulty').textContent = formatNumber(stats.difficulty);
+            document.getElementById('statPeers').textContent = stats.peers || 0;
+            document.getElementById('statTotalTxs').textContent = stats.totalTxs || 0;
+            document.getElementById('statPendingTxs').textContent = stats.mempoolSize || 0;
+            document.getElementById('statAddresses').textContent = stats.totalAddresses || 0;
+            document.getElementById('treasuryBalance').textContent = formatBalance(stats.totalTxs);
         }
     } catch (error) {
         console.error('Error loading stats:', error);

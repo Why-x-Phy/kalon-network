@@ -13,10 +13,6 @@
             <div class="logo">
                 <h1>Kalon Explorer</h1>
             </div>
-            <nav class="nav">
-                <a href="index.html" class="active">Explorer</a>
-                <a href="stats.html">Stats</a>
-            </nav>
             <div class="search">
                 <input type="text" placeholder="Search blocks, transactions or wallet addresses">
                 <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -30,18 +26,39 @@
     <!-- Main Stats -->
     <section class="stats-overview">
         <div class="container">
+            <h2 class="section-title">Network Statistics</h2>
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-label">HEIGHT</div>
-                    <div class="stat-value" id="blockHeight">Loading...</div>
+                    <div class="stat-value" id="statHeight">Loading...</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-label">HASHRATE</div>
-                    <div class="stat-value" id="hashrate">0 MH/s</div>
+                    <div class="stat-value" id="statHashrate">0 MH/s</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-label">REWARD</div>
-                    <div class="stat-value" id="reward">5.00 tKALON</div>
+                    <div class="stat-value">5.00 tKALON</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">TOTAL BLOCKS</div>
+                    <div class="stat-value" id="statTotalBlocks">Loading...</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">DIFFICULTY</div>
+                    <div class="stat-value" id="statDifficulty">Loading...</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">PEERS</div>
+                    <div class="stat-value" id="statPeers">Loading...</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">TOTAL TXS</div>
+                    <div class="stat-value" id="statTotalTxs">Loading...</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-label">PENDING TXS</div>
+                    <div class="stat-value" id="statPendingTxs">Loading...</div>
                 </div>
             </div>
         </div>
