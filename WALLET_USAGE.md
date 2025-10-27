@@ -72,17 +72,22 @@ Available wallets:
 
 - Wallet von Mnemonic importieren (wiederherstellen):
 ```bash
-# Mit Flag (empfohlen für Scripts)
+# Interaktiv (empfohlen für Server-Neustart)
+./build-v2/kalon-wallet import
+# → Eingabe 1: Mnemonic eingeben (24 Wörter)
+# → Eingabe 2: Wallet-Name eingeben (optional, wird zu wallet-{name}.json)
+# → Eingabe 3: Passphrase eingeben (optional)
+# → Wallet wird wiederhergestellt ✓
+
+# Mit Flag (für Scripts)
 ./build-v2/kalon-wallet import --mnemonic "word1 word2 ... word24" --output wallet-restored.json
 
-# Interaktiv
+# Wiederherstellung nach Server-Neustart - Beispiel:
 ./build-v2/kalon-wallet import
-# → Nach Mnemonic fragen
-# → Nach Namen fragen
-# → Wallet wird wiederhergestellt
-
-# Beispiel Wiederherstellung nach Server-Neustart:
-./build-v2/kalon-wallet import --mnemonic "your 24 word mnemonic here" --output wallet.json
+# Enter mnemonic phrase: word1 word2 word3 ... word24
+# Enter wallet name: miner
+# Enter passphrase (optional): 
+# → Wallet gespeichert als wallet-miner.json
 ```
 
-**⚠️ WICHTIG:** Nach einem Server-Neustart ohne Wallet-JSON-Dateien kannst du deine Wallet mit dem Mnemonic wiederherstellen!
+**⚠️ WICHTIG:** Nach einem Server-Neustart kannst du deine Wallet mit dem Mnemonic-Passwort (24 Wörter) wiederherstellen! Speichere den Mnemonic sicher!
