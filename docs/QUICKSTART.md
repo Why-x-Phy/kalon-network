@@ -53,6 +53,7 @@ pkill -f kalon
 ## 📚 Vollständige Dokumentation
 
 - [Installation](INSTALLATION.md) - Detaillierte Installation
+- [Running a Node](RUNNING_A_NODE.md) - Set up your own node and sync with the network
 - [Update](UPDATE.md) - Updates durchführen
 - [API](API.md) - RPC API Dokumentation
 
