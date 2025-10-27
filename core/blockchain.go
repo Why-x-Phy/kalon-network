@@ -11,15 +11,22 @@ import (
 
 // BlockchainV2 represents a professional blockchain implementation
 type BlockchainV2 struct {
+	mu             sync.RWMutex
+	blocks         []*Block
+	height         uint64
+	bestBlock      *Block
+	genesis        *GenesisConfig
+	consensus      *ConsensusV2
+	eventBus       *EventBus
+	stateManager   *StateManager
+	utxoSet        *UTXOSet
+	mempool        *Mempool
+}
+
+// Mempool manages pending transactions
+type Mempool struct {
 	mu           sync.RWMutex
-	blocks       []*Block
-	height       uint64
-	bestBlock    *Block
-	genesis      *GenesisConfig
-	consensus    *ConsensusV2
-	eventBus     *EventBus
-	stateManager *StateManager
-	utxoSet      *UTXOSet
+	transactions map[string]*Transaction // Key: transaction hash
 }
 
 // EventBus handles blockchain events
@@ -61,6 +68,7 @@ func NewBlockchainV2(genesis *GenesisConfig) *BlockchainV2 {
 		eventBus:     NewEventBus(),
 		stateManager: NewStateManager(),
 		utxoSet:      NewUTXOSet(),
+		mempool:      NewMempool(),
 	}
 
 	// Create genesis block
@@ -143,6 +151,8 @@ func (bc *BlockchainV2) addBlockV2(block *Block) error {
 	// Process UTXOs for all transactions in the block
 	for _, tx := range block.Txs {
 		bc.processTransactionUTXOs(&tx, block.Hash)
+		// Remove from mempool if it exists
+		bc.mempool.RemoveTransaction(tx.Hash)
 	}
 
 	// Add block atomically
@@ -163,6 +173,64 @@ func (bc *BlockchainV2) addBlockV2(block *Block) error {
 	log.Printf("✅ Block #%d added successfully: %x", block.Header.Number, block.Hash)
 
 	return nil
+}
+
+// CreateTransaction creates a transaction from UTXOs
+func (bc *BlockchainV2) CreateTransaction(from Address, to Address, amount uint64, fee uint64) (*Transaction, error) {
+	// Get UTXOs for sender
+	utxos := bc.utxoSet.GetUTXOs(from)
+
+	// Calculate total available balance
+	totalBalance := uint64(0)
+	for _, utxo := range utxos {
+		totalBalance += utxo.Amount
+	}
+
+	if totalBalance < amount+fee {
+		return nil, fmt.Errorf("insufficient balance: need %d, have %d", amount+fee, totalBalance)
+	}
+
+	// Create inputs
+	inputs := []TxInput{}
+	totalInput := uint64(0)
+	for _, utxo := range utxos {
+		if totalInput >= amount+fee {
+			break
+		}
+		inputs = append(inputs, TxInput{
+			PreviousTxHash: utxo.TxHash,
+			Index:          utxo.Index,
+			Signature:      []byte{}, // TODO: Sign properly
+		})
+		totalInput += utxo.Amount
+	}
+
+	// Create outputs
+	outputs := []TxOutput{
+		{Address: to, Amount: amount},
+	}
+	
+	// Add change output if needed
+	change := totalInput - amount - fee
+	if change > 0 {
+		outputs = append(outputs, TxOutput{Address: from, Amount: change})
+	}
+
+	// Create transaction
+	tx := &Transaction{
+		From:      from,
+		To:        to,
+		Amount:    amount,
+		Fee:       fee,
+		Timestamp: time.Now(),
+		Inputs:    inputs,
+		Outputs:   outputs,
+	}
+
+	// Calculate hash
+	tx.Hash = tx.CalculateHash()
+
+	return tx, nil
 }
 
 // processTransactionUTXOs processes UTXOs for a transaction
@@ -192,6 +260,11 @@ func (bc *BlockchainV2) GetBalance(address Address) uint64 {
 // GetUTXOs returns all UTXOs for an address
 func (bc *BlockchainV2) GetUTXOs(address Address) []*UTXO {
 	return bc.utxoSet.GetUTXOs(address)
+}
+
+// GetMempool returns the mempool
+func (bc *BlockchainV2) GetMempool() *Mempool {
+	return bc.mempool
 }
 
 // validateBlockV2 validates a block professionally
@@ -254,6 +327,47 @@ func (bc *BlockchainV2) GetEventBus() *EventBus {
 	return bc.eventBus
 }
 
+// NewMempool creates a new mempool
+func NewMempool() *Mempool {
+	return &Mempool{
+		transactions: make(map[string]*Transaction),
+	}
+}
+
+// AddTransaction adds a transaction to the mempool
+func (m *Mempool) AddTransaction(tx *Transaction) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.transactions[hex.EncodeToString(tx.Hash[:])] = tx
+	log.Printf("📥 Transaction added to mempool: %x", tx.Hash)
+}
+
+// GetPendingTransactions returns all pending transactions
+func (m *Mempool) GetPendingTransactions() []*Transaction {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	var txs []*Transaction
+	for _, tx := range m.transactions {
+		txs = append(txs, tx)
+	}
+	return txs
+}
+
+// RemoveTransaction removes a transaction from the mempool
+func (m *Mempool) RemoveTransaction(txHash Hash) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.transactions, hex.EncodeToString(txHash[:]))
+}
+
+// Clear removes all transactions from the mempool
+func (m *Mempool) Clear() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.transactions = make(map[string]*Transaction)
+}
+
 // CreateNewBlockV2 creates a new block template professionally
 func (bc *BlockchainV2) CreateNewBlockV2(miner Address, txs []Transaction) *Block {
 	bc.mu.RLock()
@@ -270,6 +384,12 @@ func (bc *BlockchainV2) CreateNewBlockV2(miner Address, txs []Transaction) *Bloc
 	// Create block reward transaction
 	blockReward := bc.calculateBlockReward(parent.Header.Number + 1)
 	rewardTx := bc.createBlockRewardTransaction(miner, blockReward)
+
+	// Get pending transactions from mempool
+	pendingTxs := bc.mempool.GetPendingTransactions()
+	for _, tx := range pendingTxs {
+		txs = append(txs, *tx)
+	}
 
 	// Add reward transaction to the beginning of transactions
 	allTxs := append([]Transaction{rewardTx}, txs...)

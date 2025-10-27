@@ -695,24 +695,30 @@ func (s *ServerV2) handleSendTransaction(req *RPCRequest) *RPCResponse {
 		}
 	}
 
-	// Create transaction
-	tx := core.Transaction{
-		From:      core.AddressFromString(fromStr),
-		To:        core.AddressFromString(toStr),
-		Amount:    uint64(amount),
-		Fee:       uint64(fee),
-		Timestamp: time.Now(),
-		Inputs:    []core.TxInput{},
-		Outputs:   []core.TxOutput{},
+	// Get addresses
+	fromAddr := core.AddressFromString(fromStr)
+	toAddr := core.AddressFromString(toStr)
+
+	// Create transaction from UTXOs
+	tx, err := s.blockchain.CreateTransaction(fromAddr, toAddr, uint64(amount), uint64(fee))
+	if err != nil {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32603,
+				Message: "Transaction creation failed",
+				Data:    err.Error(),
+			},
+			ID: req.ID,
+		}
 	}
 
-	// Calculate transaction hash
-	tx.Hash = tx.CalculateHash()
+	log.Printf("📤 Transaction created - From: %s, To: %s, Amount: %d, Hash: %x", fromStr, toStr, tx.Amount, tx.Hash)
 
-	log.Printf("📤 Transaction received - From: %s, To: %s, Amount: %d", fromStr, toStr, tx.Amount)
+	// Add to mempool
+	s.blockchain.GetMempool().AddTransaction(tx)
 
-	// TODO: Add to mempool and include in next block
-	// For now, just return success
+	// Return transaction hash
 	return &RPCResponse{
 		JSONRPC: "2.0",
 		Result: map[string]interface{}{
