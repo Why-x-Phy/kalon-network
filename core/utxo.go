@@ -108,7 +108,7 @@ func CalculateTransactionHash(tx *Transaction) Hash {
 	// Create a deterministic hash of the transaction
 	data := make([]byte, 0, 200)
 
-	// Add inputs
+	// Add inputs (for block rewards this will be empty but still adds uniqueness)
 	for _, input := range tx.Inputs {
 		data = append(data, input.PreviousTxHash[:]...)
 		inputIndexBytes := make([]byte, 4)
@@ -124,10 +124,14 @@ func CalculateTransactionHash(tx *Transaction) Hash {
 		data = append(data, amountBytes...)
 	}
 
-	// Add timestamp
+	// Add timestamp (CRITICAL: includes nanosecond precision for uniqueness)
 	timestampBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(timestampBytes, uint64(tx.Timestamp.Unix()))
+	binary.BigEndian.PutUint64(timestampBytes, uint64(tx.Timestamp.UnixNano()))
 	data = append(data, timestampBytes...)
+
+	// Add from/to addresses for uniqueness
+	data = append(data, tx.From[:]...)
+	data = append(data, tx.To[:]...)
 
 	hash := sha256.Sum256(data)
 	return Hash(hash)
