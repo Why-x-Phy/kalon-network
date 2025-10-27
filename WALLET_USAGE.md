@@ -70,6 +70,29 @@ Available wallets:
 ./build-v2/kalon-wallet balance --address kalon1...
 ```
 
+- Transaktion senden (Überweisung):
+```bash
+# Momentan nur über direkte RPC-Calls möglich
+# TODO: Wallet send-Befehl implementieren
+
+# Beispiel mit curl:
+curl -X POST http://localhost:16316/rpc \
+  -H "Content-Type: application/json" \
+  -d '{
+    "jsonrpc":"2.0",
+    "method":"sendTransaction",
+    "params":{
+      "from":"kalon1...",
+      "to":"kalon1...",
+      "amount":1000000,
+      "fee":10000
+    },
+    "id":1
+  }'
+```
+
+**⚠️ HINWEIS:** Die vollständige Transaktions-Funktionalität mit UTXO-Verwaltung ist noch in Entwicklung. Aktuell kann man Transaktionen senden, sie müssen aber noch in Blöcke eingebaut werden.
+
 - Wallet von Mnemonic importieren (wiederherstellen):
 ```bash
 # Interaktiv (empfohlen für Server-Neustart)
