@@ -98,6 +98,8 @@ func main() {
 		handleCreate(walletManager, args)
 	case "import":
 		handleImport(walletManager, args)
+	case "list":
+		handleList(args)
 	case "export":
 		handleExport(walletManager, args)
 	case "balance":
@@ -119,8 +121,16 @@ func main() {
 func handleCreate(wm *WalletManager, args []string) {
 	fs := flag.NewFlagSet("create", flag.ExitOnError)
 	passphrase := fs.String("passphrase", "", "Passphrase for wallet encryption")
-	output := fs.String("output", "wallet.json", "Output file for wallet")
+	name := fs.String("name", "", "Wallet name (will be saved as wallet-{name}.json)")
+	output := fs.String("output", "", "Output file for wallet (overrides name)")
 	fs.Parse(args)
+	
+	// If no custom output specified, use name-based file
+	if *output == "" && *name != "" {
+		*output = fmt.Sprintf("wallet-%s.json", *name)
+	} else if *output == "" {
+		*output = "wallet.json"
+	}
 
 	// Get passphrase if not provided
 	if *passphrase == "" {
@@ -154,6 +164,11 @@ func handleCreate(wm *WalletManager, args []string) {
 		Mnemonic:  wallet.Mnemonic,
 	}
 
+	// Check if file already exists
+	if _, err := os.Stat(*output); err == nil {
+		log.Fatalf("Wallet file already exists: %s. Use --name to create a different wallet.", *output)
+	}
+	
 	// Save wallet
 	if err := saveWallet(walletInfo, *output); err != nil {
 		log.Fatalf("Failed to save wallet: %v", err)
@@ -452,6 +467,52 @@ func queryBalance(rpcURL, address string) (uint64, error) {
 	return uint64(balance), nil
 }
 
+// handleList handles wallet listing
+func handleList(args []string) {
+	fs := flag.NewFlagSet("list", flag.ExitOnError)
+	fs.Parse(args)
+	
+	fmt.Println("Available wallets:")
+	
+	// Find all wallet files
+	wd, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("Failed to get working directory: %v", err)
+	}
+	
+	files, err := os.ReadDir(wd)
+	if err != nil {
+		log.Fatalf("Failed to read directory: %v", err)
+	}
+	
+	found := false
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+		
+		if strings.HasPrefix(file.Name(), "wallet") && strings.HasSuffix(file.Name(), ".json") {
+			found = true
+			walletInfo, err := loadWallet(file.Name())
+			if err != nil {
+				fmt.Printf("  ⚠️  %s (corrupted)\n", file.Name())
+				continue
+			}
+			
+			fmt.Printf("  📄 %s\n", file.Name())
+			fmt.Printf("     Address: %s\n", walletInfo.Address)
+			if walletInfo.PublicKey != "" {
+				fmt.Printf("     Public Key: %s\n", walletInfo.PublicKey)
+			}
+			fmt.Println()
+		}
+	}
+	
+	if !found {
+		fmt.Println("  No wallets found. Use 'kalon-wallet create' to create one.")
+	}
+}
+
 // sendTransaction sends a transaction via RPC
 func sendTransaction(rpcURL string, txReq *TransactionRequest) (*TransactionResponse, error) {
 	// This is a simplified implementation
@@ -479,6 +540,7 @@ func usage() {
 	fmt.Println("Commands:")
 	fmt.Println("  create     Create a new wallet")
 	fmt.Println("  import     Import wallet from mnemonic")
+	fmt.Println("  list       List all available wallets")
 	fmt.Println("  export     Export wallet information")
 	fmt.Println("  balance    Check wallet balance")
 	fmt.Println("  send       Send transaction")
@@ -486,9 +548,11 @@ func usage() {
 	fmt.Println("  help       Show this help message")
 	fmt.Println()
 	fmt.Println("Examples:")
-	fmt.Println("  kalon-wallet create")
-	fmt.Println("  kalon-wallet import --mnemonic 'word1 word2 ...'")
+	fmt.Println("  kalon-wallet create --name miner")
+	fmt.Println("  kalon-wallet create --name test1")
+	fmt.Println("  kalon-wallet list")
+	fmt.Println("  kalon-wallet import --mnemonic 'word1 word2 ...' --name backup")
 	fmt.Println("  kalon-wallet balance --address kalon1abc...")
 	fmt.Println("  kalon-wallet send --to kalon1def... --amount 1000000")
-	fmt.Println("  kalon-wallet info --input wallet.json")
+	fmt.Println("  kalon-wallet info --input wallet-test.json")
 }
