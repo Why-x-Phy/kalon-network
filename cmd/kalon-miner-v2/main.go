@@ -106,8 +106,8 @@ func (m *MinerV2) Start() error {
 	log.Printf("   Threads: %d", m.config.Threads)
 	log.Printf("   RPC URL: %s", m.config.RPCURL)
 
-	// Start mining threads
-	for i := 0; i < m.config.Threads; i++ {
+	// Start mining threads - CRITICAL: Use only 1 worker to prevent race conditions
+	for i := 0; i < 1; i++ {
 		m.wg.Add(1)
 		go m.miningWorker(i)
 	}
@@ -172,7 +172,8 @@ func (m *MinerV2) mineBlock(workerID int) {
 		return
 	}
 
-	// Create new block template with transactions from RPC server
+	// CRITICAL: Get fresh template for each mining attempt
+	// This prevents multiple workers from using the same outdated template
 	block := m.blockchain.CreateNewBlock(miner, []core.Transaction{}, m.config.Wallet)
 	if block == nil {
 		log.Printf("ÔØî Failed to create block template")
@@ -180,12 +181,11 @@ func (m *MinerV2) mineBlock(workerID int) {
 		return
 	}
 
-	// CRITICAL: Check if this template is still valid
-	// If another worker already submitted a block, this template is outdated
+	// CRITICAL: Double-check template validity before mining
 	currentHeight := m.getCurrentHeight()
 	if currentHeight >= block.Header.Number {
 		log.Printf("🔍 Template outdated: current height %d >= template height %d", currentHeight, block.Header.Number)
-		time.Sleep(100 * time.Millisecond) // Short delay before retry
+		time.Sleep(100 * time.Millisecond)
 		return
 	}
 
