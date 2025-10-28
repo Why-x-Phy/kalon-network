@@ -39,17 +39,17 @@ type RPCError struct {
 
 // ServerV2 represents a professional RPC server
 type ServerV2 struct {
-	addr            string
-	blockchain      *core.BlockchainV2
-	mu              sync.RWMutex
-	connections     map[string]*Connection
-	eventBus        *core.EventBus
-	ctx             context.Context
-	cancel          context.CancelFunc
-	allowedIPs      map[string]bool    // Whitelist of allowed IPs
-	rateLimits      map[string]*RateLimit // Rate limiting per IP
-	requireAuth     bool                // Whether auth is required
-	authTokens      map[string]bool    // Valid auth tokens
+	addr        string
+	blockchain  *core.BlockchainV2
+	mu          sync.RWMutex
+	connections map[string]*Connection
+	eventBus    *core.EventBus
+	ctx         context.Context
+	cancel      context.CancelFunc
+	allowedIPs  map[string]bool       // Whitelist of allowed IPs
+	rateLimits  map[string]*RateLimit // Rate limiting per IP
+	requireAuth bool                  // Whether auth is required
+	authTokens  map[string]bool       // Valid auth tokens
 }
 
 // Connection represents a client connection
@@ -62,9 +62,9 @@ type Connection struct {
 
 // RateLimit tracks rate limiting for an IP
 type RateLimit struct {
-	mu            sync.RWMutex
-	Count         int
-	LastReset     time.Time
+	mu             sync.RWMutex
+	Count          int
+	LastReset      time.Time
 	RequestsPerMin int
 }
 
@@ -73,16 +73,16 @@ func NewServerV2(addr string, blockchain *core.BlockchainV2) *ServerV2 {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	server := &ServerV2{
-		addr:           addr,
-		blockchain:     blockchain,
-		connections:    make(map[string]*Connection),
-		eventBus:       blockchain.GetEventBus(),
-		ctx:            ctx,
-		cancel:         cancel,
-		allowedIPs:     make(map[string]bool),
-		rateLimits:     make(map[string]*RateLimit),
-		requireAuth:    false, // For testnet: auth disabled by default
-		authTokens:     make(map[string]bool),
+		addr:        addr,
+		blockchain:  blockchain,
+		connections: make(map[string]*Connection),
+		eventBus:    blockchain.GetEventBus(),
+		ctx:         ctx,
+		cancel:      cancel,
+		allowedIPs:  make(map[string]bool),
+		rateLimits:  make(map[string]*RateLimit),
+		requireAuth: false, // For testnet: auth disabled by default
+		authTokens:  make(map[string]bool),
 	}
 
 	// Start connection cleanup routine
@@ -136,7 +136,7 @@ func (s *ServerV2) Stop() {
 func (s *ServerV2) handleRequest(w http.ResponseWriter, r *http.Request) {
 	// Extract IP
 	ip := s.extractIP(r)
-	
+
 	// Check IP whitelist if enabled
 	if len(s.allowedIPs) > 0 && !s.allowedIPs[ip] {
 		http.Error(w, "Forbidden", http.StatusForbidden)
@@ -164,7 +164,10 @@ func (s *ServerV2) handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Write response
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("❌ Failed to encode RPC response: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+	}
 }
 
 // handleRPCMethod handles RPC methods professionally
@@ -413,6 +416,32 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 
 	log.Printf("🔧 Creating template for block #%d with parent hash: %x", block.Header.Number, block.Header.ParentHash)
 
+	// Serialize transactions properly for JSON response
+	txList := make([]interface{}, 0, len(block.Txs))
+	for _, tx := range block.Txs {
+		txMap := map[string]interface{}{
+			"hash":      hex.EncodeToString(tx.Hash[:]),
+			"from":      tx.From.String(),
+			"to":        tx.To.String(),
+			"amount":    tx.Amount,
+			"fee":       tx.Fee,
+			"nonce":     tx.Nonce,
+			"timestamp": tx.Timestamp.Unix(),
+		}
+
+		// Serialize outputs
+		outputs := make([]interface{}, 0, len(tx.Outputs))
+		for _, output := range tx.Outputs {
+			outputs = append(outputs, map[string]interface{}{
+				"address": hex.EncodeToString(output.Address[:]),
+				"amount":  output.Amount,
+			})
+		}
+		txMap["outputs"] = outputs
+
+		txList = append(txList, txMap)
+	}
+
 	return &RPCResponse{
 		JSONRPC: "2.0",
 		Result: map[string]interface{}{
@@ -421,7 +450,7 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 			"parentHash":   hex.EncodeToString(block.Header.ParentHash[:]),
 			"timestamp":    block.Header.Timestamp.Unix(),
 			"miner":        hex.EncodeToString(block.Header.Miner[:]),
-			"transactions": block.Txs, // Include transactions with block rewards
+			"transactions": txList,
 		},
 		ID: req.ID,
 	}
@@ -959,8 +988,8 @@ func (s *ServerV2) checkRateLimit(ip string) bool {
 	limit, exists := s.rateLimits[ip]
 	if !exists {
 		limit = &RateLimit{
-			Count:         0,
-			LastReset:     time.Now(),
+			Count:          0,
+			LastReset:      time.Now(),
 			RequestsPerMin: 60, // Default: 60 requests per minute
 		}
 		s.rateLimits[ip] = limit
