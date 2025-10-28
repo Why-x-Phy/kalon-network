@@ -190,9 +190,9 @@ func (n *NodeV2) loadGenesis() (*core.GenesisConfig, error) {
 			InitialBlockReward: 5.0,
 			HalvingSchedule:    []core.HalvingEvent{},
 			Difficulty: core.DifficultyConfig{
-				Algo:              "LWMA",
-				Window:            120,
-				InitialDifficulty: 5000,
+				Algo:                 "LWMA",
+				Window:               120,
+				InitialDifficulty:    5000,
 				MaxAdjustPerBlockPct: 25,
 				LaunchGuard: core.LaunchGuard{
 					Enabled:                   true,
@@ -217,9 +217,9 @@ func (n *NodeV2) loadGenesis() (*core.GenesisConfig, error) {
 			},
 			Governance: core.GovernanceConfig{
 				Parameters: core.GovernanceParameters{
-					NetworkFeeRate:      0.05,
-					TxFeeShareTreasury:  0.20,
-					TreasuryCapPercent:  10,
+					NetworkFeeRate:     0.05,
+					TxFeeShareTreasury: 0.20,
+					TreasuryCapPercent: 10,
 				},
 			},
 		}, nil

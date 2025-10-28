@@ -569,7 +569,7 @@ func (bc *BlockchainV2) loadChainFromStorage() {
 			return
 		}
 		bc.blocks = append(bc.blocks, block)
-		
+
 		// IMPORTANT: Reconstruct UTXOs for each block
 		// This is critical because UTXOs are in-memory and need to be rebuilt
 		for _, tx := range block.Txs {
@@ -615,7 +615,7 @@ func (c *ConsensusV2) CalculateDifficultyV2(blockNumber uint64, parent *Block) u
 	if parent != nil {
 		return parent.Header.Difficulty
 	}
-	
+
 	// Default difficulty for genesis or fallback
 	return 5000
 }

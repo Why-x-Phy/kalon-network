@@ -171,7 +171,7 @@ func (cm *ConsensusManager) CalculateDifficulty(height uint64, parent *Block) ui
 	if height < cm.genesis.Difficulty.Window {
 		return parent.Header.Difficulty
 	}
-	
+
 	// Keep difficulty stable (no adjustment factor yet)
 	adjustmentFactor := 1.0
 
