@@ -189,6 +189,14 @@ func (m *MinerV2) mineBlock(workerID int) {
 		return
 	}
 
+	// Additional check: Verify parent hash is still current
+	bestBlock := m.getBestBlock()
+	if bestBlock != nil && bestBlock.Hash != block.Header.ParentHash {
+		log.Printf("🔍 Template parent hash outdated: expected %x, got %x", bestBlock.Hash, block.Header.ParentHash)
+		time.Sleep(100 * time.Millisecond)
+		return
+	}
+
 	// Mine the block
 	startTime := time.Now()
 	nonce := uint64(0)
@@ -626,6 +634,50 @@ func (m *MinerV2) getCurrentHeight() uint64 {
 	}
 
 	return 0
+}
+
+// getBestBlock gets the current best block
+func (m *MinerV2) getBestBlock() *core.Block {
+	req := RPCRequest{
+		JSONRPC: "2.0",
+		Method:  "getBestBlock",
+		Params:  map[string]interface{}{},
+		ID:      998,
+	}
+
+	resp, err := m.blockchain.callRPC(req)
+	if err != nil {
+		return nil
+	}
+
+	if resp.Error != nil {
+		return nil
+	}
+
+	// Parse the block data from response
+	result, ok := resp.Result.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	// Extract hash
+	hashStr, ok := result["hash"].(string)
+	if !ok {
+		return nil
+	}
+
+	hashBytes, err := hex.DecodeString(hashStr)
+	if err != nil || len(hashBytes) != 32 {
+		return nil
+	}
+
+	var hash core.Hash
+	copy(hash[:], hashBytes)
+
+	// Create a minimal block with just the hash for comparison
+	return &core.Block{
+		Hash: hash,
+	}
 }
 
 // RPCRequest represents a JSON-RPC request
