@@ -1,7 +1,9 @@
 ﻿package main
 
 import (
+	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -174,12 +176,61 @@ func (n *NodeV2) Stop() error {
 
 // loadGenesis loads the genesis configuration
 func (n *NodeV2) loadGenesis() (*core.GenesisConfig, error) {
-	// For now, create a default genesis
-	// In a real implementation, this would load from file
-	return &core.GenesisConfig{
-		InitialBlockReward: 5.0, // 5 tKALON block reward
-		Difficulty: core.DifficultyConfig{
-			InitialDifficulty: 4,
-		},
-	}, nil
+	// Load genesis from file
+	data, err := os.ReadFile(n.config.Genesis)
+	if err != nil {
+		log.Printf("⚠️ Failed to read genesis file %s: %v. Using defaults.", n.config.Genesis, err)
+		// Return default genesis with proper difficulty
+		return &core.GenesisConfig{
+			ChainID:            7718,
+			Name:               "Kalon Testnet",
+			Symbol:             "tKALON",
+			BlockTimeTarget:    30,
+			MaxSupply:          1000000000,
+			InitialBlockReward: 5.0,
+			HalvingSchedule:    []core.HalvingEvent{},
+			Difficulty: core.DifficultyConfig{
+				Algo:              "LWMA",
+				Window:            120,
+				InitialDifficulty: 5000,
+				MaxAdjustPerBlockPct: 25,
+				LaunchGuard: core.LaunchGuard{
+					Enabled:                   true,
+					DurationHours:             24,
+					DifficultyFloorMultiplier: 4.0,
+					InitialReward:             2.0,
+				},
+			},
+			AddressFormat: core.AddressFormat{
+				Type: "bech32",
+				HRP:  "tkalon",
+			},
+			Premine: core.PremineConfig{
+				Enabled: false,
+			},
+			TreasuryAddress: "tkalon1treasury0000000000000000000000000000000000000000000000000000000000",
+			NetworkFee: core.NetworkFeeConfig{
+				BlockFeeRate:       0.05,
+				TxFeeShareTreasury: 0.20,
+				BaseTxFee:          0.01,
+				GasPrice:           1000,
+			},
+			Governance: core.GovernanceConfig{
+				Parameters: core.GovernanceParameters{
+					NetworkFeeRate:      0.05,
+					TxFeeShareTreasury:  0.20,
+					TreasuryCapPercent:  10,
+				},
+			},
+		}, nil
+	}
+
+	// Parse JSON
+	var genesis core.GenesisConfig
+	if err := json.Unmarshal(data, &genesis); err != nil {
+		return nil, fmt.Errorf("failed to parse genesis JSON: %w", err)
+	}
+
+	log.Printf("✅ Loaded genesis from %s", n.config.Genesis)
+	return &genesis, nil
 }
