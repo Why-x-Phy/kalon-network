@@ -247,7 +247,13 @@ func (bs *BlockStorage) GetBestBlock() (*core.Block, error) {
 		return nil, nil
 	}
 
-	return bs.GetBlockByHash(hashData)
+	// Convert hex string to bytes
+	hashBytes, err := hex.DecodeString(string(hashData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode hash: %v", err)
+	}
+
+	return bs.GetBlockByHash(hashBytes)
 }
 
 // SetBestBlockHash sets the best block hash (called internally by StoreBlock)
