@@ -177,8 +177,13 @@ func (bs *BlockStorage) StoreBlock(block *core.Block) error {
 	}
 
 	// Update best block if this is higher
-	bestBlock, err := bs.GetBestBlock()
-	if err != nil || bestBlock == nil || block.Header.Number > bestBlock.Header.Number {
+	bestBlockNumber := uint64(0)
+	bestBlock, _ := bs.GetBestBlock()
+	if bestBlock != nil {
+		bestBlockNumber = bestBlock.Header.Number
+	}
+	
+	if block.Header.Number > bestBlockNumber {
 		if err := bs.SetBestBlock(block); err != nil {
 			return fmt.Errorf("failed to update best block: %v", err)
 		}
@@ -230,6 +235,10 @@ func (bs *BlockStorage) GetBestBlock() (*core.Block, error) {
 	bestKey := []byte("best_block")
 	hashData, err := bs.storage.Get(bestKey)
 	if err != nil {
+		// If key not found, return nil (no error)
+		if err == leveldb.ErrNotFound {
+			return nil, nil
+		}
 		return nil, err
 	}
 	if hashData == nil {
@@ -237,6 +246,12 @@ func (bs *BlockStorage) GetBestBlock() (*core.Block, error) {
 	}
 
 	return bs.GetBlockByHash(hashData)
+}
+
+// SetBestBlockHash sets the best block hash (called internally by StoreBlock)
+func (bs *BlockStorage) SetBestBlockHash(hash []byte) error {
+	bestKey := []byte("best_block")
+	return bs.storage.Put(bestKey, hash)
 }
 
 // SetBestBlock sets the best block

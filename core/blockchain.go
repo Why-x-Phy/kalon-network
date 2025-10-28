@@ -528,24 +528,32 @@ func (bc *BlockchainV2) AddBlock(block *Block) error {
 
 // loadChainFromStorage loads the blockchain from persistent storage
 func (bc *BlockchainV2) loadChainFromStorage() {
+	log.Printf("🔍 DEBUG: loadChainFromStorage called")
 	if bc.storage == nil {
+		log.Printf("⚠️ Storage is nil, skipping load")
 		return
 	}
 
+	log.Printf("🔍 DEBUG: Getting best block from storage")
 	// Get the best block
 	bestBlock, err := bc.storage.GetBestBlock()
 	if err != nil {
-		log.Printf("⚠️ No existing chain found, starting fresh")
+		log.Printf("⚠️ No existing chain found, starting fresh (error: %v)", err)
 		return
 	}
 
 	if bestBlock == nil {
+		log.Printf("⚠️ Best block is nil, starting fresh")
 		return
 	}
+
+	log.Printf("🔍 DEBUG: Best block found - Height: %d, Hash: %x", bestBlock.Header.Number, bestBlock.Hash)
 
 	// Reconstruct chain by loading blocks from storage
 	bc.height = bestBlock.Header.Number
 	bc.bestBlock = bestBlock
+
+	log.Printf("🔍 DEBUG: Loading %d blocks from storage", bc.height+1)
 
 	// Load all blocks from genesis to best block
 	for i := uint64(0); i <= bc.height; i++ {
