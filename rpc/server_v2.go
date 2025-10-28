@@ -164,9 +164,17 @@ func (s *ServerV2) handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Write response
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("❌ Failed to encode RPC response: %v", err)
+	
+	// CRITICAL: Manual JSON encoding to prevent circular references
+	jsonBytes, err := json.Marshal(response)
+	if err != nil {
+		log.Printf("❌ Failed to marshal RPC response: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	
+	if _, err := w.Write(jsonBytes); err != nil {
+		log.Printf("❌ Failed to write RPC response: %v", err)
 	}
 }
 
