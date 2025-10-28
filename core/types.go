@@ -363,7 +363,23 @@ func (tx *Transaction) CalculateHash() Hash {
 
 // IsValid checks if a transaction is valid
 func (tx *Transaction) IsValid() bool {
-	return tx.Amount > 0 && tx.Fee > 0 && len(tx.Signature) > 0
+	// Basic validation
+	if tx.Amount == 0 && tx.Fee == 0 {
+		return false // immature
+	}
+	
+	// Check if transaction has necessary fields
+	if tx.From == (Address{}) || tx.To == (Address{}) {
+		return false
+	}
+	
+	// Signature validation (optional for block rewards)
+	// Block rewards don't have signatures
+	if len(tx.Inputs) > 0 && len(tx.Signature) == 0 {
+		return false // Normal transactions need signatures
+	}
+	
+	return true
 }
 
 // GetCurrentReward calculates the current block reward based on height and halving schedule

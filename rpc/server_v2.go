@@ -14,6 +14,29 @@ import (
 	"github.com/kalon-network/kalon/core"
 )
 
+// RPCRequest represents a JSON-RPC request
+type RPCRequest struct {
+	JSONRPC string      `json:"jsonrpc"`
+	Method  string      `json:"method"`
+	Params  interface{} `json:"params"`
+	ID      interface{} `json:"id"`
+}
+
+// RPCResponse represents a JSON-RPC response
+type RPCResponse struct {
+	JSONRPC string      `json:"jsonrpc"`
+	Result  interface{} `json:"result,omitempty"`
+	Error   *RPCError   `json:"error,omitempty"`
+	ID      interface{} `json:"id"`
+}
+
+// RPCError represents an RPC error
+type RPCError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Data    string `json:"data,omitempty"`
+}
+
 // ServerV2 represents a professional RPC server
 type ServerV2 struct {
 	addr        string

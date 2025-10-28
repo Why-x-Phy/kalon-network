@@ -176,6 +176,7 @@ func (bc *BlockchainV2) addBlockV2(block *Block) error {
 }
 
 // CreateTransaction creates a transaction from UTXOs
+// Note: Transaction must be signed separately using crypto.SignTransaction()
 func (bc *BlockchainV2) CreateTransaction(from Address, to Address, amount uint64, fee uint64) (*Transaction, error) {
 	// Get UTXOs for sender
 	utxos := bc.utxoSet.GetUTXOs(from)
@@ -200,7 +201,7 @@ func (bc *BlockchainV2) CreateTransaction(from Address, to Address, amount uint6
 		inputs = append(inputs, TxInput{
 			PreviousTxHash: utxo.TxHash,
 			Index:          utxo.Index,
-			Signature:      []byte{}, // TODO: Sign properly
+			Signature:      []byte{}, // Signature will be added using crypto.SignTransaction()
 		})
 		totalInput += utxo.Amount
 	}
@@ -225,6 +226,7 @@ func (bc *BlockchainV2) CreateTransaction(from Address, to Address, amount uint6
 		Timestamp: time.Now(),
 		Inputs:    inputs,
 		Outputs:   outputs,
+		Signature: []byte{}, // Will be set when signed
 	}
 
 	// Calculate hash
@@ -243,7 +245,7 @@ func (bc *BlockchainV2) processTransactionUTXOs(tx *Transaction, blockHash Hash)
 	// Create new UTXOs for outputs
 	for i, output := range tx.Outputs {
 		bc.utxoSet.AddUTXO(tx.Hash, uint32(i), output.Amount, output.Address, blockHash)
-		log.Printf("💰 UTXO created - Address: %s, Amount: %d, TxHash: %x", hex.EncodeToString(output.Address[:]), output.Amount, tx.Hash)
+		LogDebug("UTXO created - Address: %s, Amount: %d, TxHash: %x", hex.EncodeToString(output.Address[:]), output.Amount, tx.Hash)
 	}
 }
 
