@@ -446,7 +446,7 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 			})
 		}
 		txMap["outputs"] = outputs
-		
+
 		// Serialize inputs to be complete
 		inputs := make([]interface{}, 0, len(tx.Inputs))
 		for _, input := range tx.Inputs {
