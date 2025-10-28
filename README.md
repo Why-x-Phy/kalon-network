@@ -1,115 +1,326 @@
 # Kalon Network
 
-Eine moderne Blockchain-Implementierung in Go mit UTXO-basiertem System.
+A modern blockchain implementation in Go with a UTXO-based system, designed for scalability, security, and ease of use.
 
 ## ✨ Features
 
-- **UTXO-System**: Bitcoin-ähnliches UTXO-Model
-- **PoW-Mining**: Proof-of-Work Konsensmechanismus
-- **RPC API**: JSON-RPC Schnittstelle
-- **Wallet**: Unterstützung für Mnemonic-Phrases (BIP39)
-- **Mining**: CPU-basierte Block-Generierung
-- **Testnet**: Vorkonfiguriertes Testnet für Entwicklung
+- **UTXO System**: Bitcoin-like Unspent Transaction Output model
+- **Proof of Work**: CPU-based mining with adjustable difficulty
+- **RPC API**: Full JSON-RPC interface for blockchain interaction
+- **Wallet Management**: BIP39 mnemonic phrase support for secure key management
+- **Mining**: Efficient CPU mining with configurable threads
+- **Block Explorer**: Web-based explorer with real-time blockchain data
+- **Testnet**: Pre-configured testnet for development and testing
+- **Multiple Networks**: Testnet, Mainnet, and Community Testnet support
 
 ## 🚀 Quick Start
 
+Get up and running in minutes:
+
 ```bash
-# Repository clonen
+# Clone repository
 git clone https://github.com/Why-x-Phy/kalon-network.git
 cd kalon-network
 
-# Alles bauen
+# Build all components
+make build
+
+# Or build individually:
 go build -o build-v2/kalon-node-v2 cmd/kalon-node-v2/main.go
 go build -o build-v2/kalon-miner-v2 cmd/kalon-miner-v2/main.go
 go build -o build-v2/kalon-wallet cmd/kalon-wallet/main.go
 
-# Node starten
+# Start node
 ./build-v2/kalon-node-v2 -datadir data-v2/testnet -genesis genesis/testnet.json -rpc :16316 &
 
-# Wallet erstellen
+# Create wallet
 ./build-v2/kalon-wallet create
 
-# Miner starten
-./build-v2/kalon-miner-v2 -wallet DEINE_ADRESSE -threads 1 -rpc http://localhost:16316 &
+# Start mining
+./build-v2/kalon-miner-v2 -wallet YOUR_ADDRESS -threads 2 -rpc http://localhost:16316 &
 ```
 
-Vollständige Anleitung: [docs/QUICKSTART.md](docs/QUICKSTART.md)
+For detailed instructions, see [Quick Start Guide](docs/QUICKSTART.md).
 
-## 📚 Dokumentation
+## 📚 Documentation
 
-- [Quick Start](docs/QUICKSTART.md) - Schnelle Installation
-- [Installation](docs/INSTALLATION.md) - Detaillierte Installation
-- [Updates](docs/UPDATE.md) - Updates durchführen
-- [Server Deployment](SERVER_DEPLOYMENT.md) - Server-Deployment
-- [Wallet Setup](WALLET_SETUP.md) - Wallet-Einrichtung
+### For Users
+- **[User Guide](docs/USER_GUIDE.md)** - Complete guide for running nodes and mining
+- **[Running a Node](docs/RUNNING_A_NODE.md)** - Detailed node setup instructions
+- **[Command Reference](docs/COMMAND_REFERENCE.md)** - All available commands and examples
 
-## 🏗 Projekt-Struktur
+### For Administrators
+- **[Admin Guide](docs/ADMIN_GUIDE.md)** - System administration and maintenance
+- **[Installation](docs/INSTALLATION.md)** - Detailed installation guide
+- **[Updates](docs/UPDATE.md)** - Update procedures
+
+## 🏗️ Project Structure
 
 ```
 kalon-network/
-├── cmd/                 # Haupt-Anwendungen
-│   ├── kalon-node-v2/  # Blockchain-Node
-│   ├── kalon-miner-v2/ # Mining-Software
-│   └── kalon-wallet/   # Wallet-Manager
-├── core/               # Blockchain-Kern
-│   ├── blockchain.go   # Blockchain-Logik
-│   ├── consensus.go    # Konsensmechanismus
-│   └── utxo.go         # UTXO-System
-├── crypto/             # Kryptographie
-│   ├── bech32.go       # Bech32-Adressen
-│   ├── bip39.go        # Mnemonic-Phrases
-│   └── keys.go         # Schlüsselgenerierung
-├── mining/             # Mining-Logik
-├── rpc/                 # RPC-Server
-├── genesis/             # Genesis-Konfiguration
-└── docs/                # Dokumentation
+├── cmd/                    # Main applications
+│   ├── kalon-node-v2/     # Blockchain node
+│   ├── kalon-miner-v2/    # Mining software
+│   └── kalon-wallet/      # Wallet manager
+├── core/                   # Blockchain core
+│   ├── blockchain.go      # Blockchain logic
+│   ├── consensus.go       # Consensus mechanism
+│   ├── types.go           # Core data types
+│   └── utxo.go            # UTXO system
+├── crypto/                 # Cryptography
+│   ├── bech32.go          # Bech32 addresses
+│   ├── bip39.go           # Mnemonic phrases
+│   └── keys.go            # Key generation
+├── mining/                 # Mining logic
+│   ├── miner.go           # Mining algorithm
+│   └── randomx.go         # Hash verification
+├── rpc/                    # RPC server
+│   ├── server.go          # RPC implementation
+│   └── server_v2.go       # Enhanced RPC
+├── explorer/              # Block explorer
+│   ├── api/               # Explorer API
+│   └── static/            # Web interface
+├── genesis/               # Genesis configurations
+│   ├── testnet.json       # Testnet config
+│   ├── mainnet.json       # Mainnet config
+│   └── community-testnet.json
+└── docs/                  # Documentation
 ```
 
-## 🔧 Voraussetzungen
+## 🔧 Requirements
 
-- **Go**: Version 1.21+
-- **OS**: Linux, macOS, Windows
-- **RAM**: Mindestens 512MB
-- **Disk**: ~100MB
+- **Go**: Version 1.21 or later
+- **OS**: Linux (recommended), macOS, Windows
+- **RAM**: 2GB minimum (4GB+ recommended)
+- **Storage**: 10GB minimum
+- **CPU**: 2+ cores for mining
+- **Network**: Stable internet connection
 
 ## 📖 RPC API
 
-### getHeight
+Kalon provides a comprehensive JSON-RPC API:
+
+### Get Blockchain Height
 ```json
-{"jsonrpc":"2.0","method":"getHeight","params":{},"id":1}
+{
+  "jsonrpc": "2.0",
+  "method": "getHeight",
+  "id": 1
+}
 ```
 
-### getBalance
+### Get Address Balance
 ```json
-{"jsonrpc":"2.0","method":"getBalance","params":{"address":"..."},"id":2}
+{
+  "jsonrpc": "2.0",
+  "method": "getBalance",
+  "params": {
+    "address": "kalon1abc123..."
+  },
+  "id": 2
+}
 ```
 
-### getBestBlock
+### Get Best Block
 ```json
-{"jsonrpc":"2.0","method":"getBestBlock","params":{},"id":3}
+{
+  "jsonrpc": "2.0",
+  "method": "getBestBlock",
+  "id": 3
+}
 ```
+
+### Get Recent Blocks
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "getRecentBlocks",
+  "params": {
+    "limit": 20
+  },
+  "id": 4
+}
+```
+
+### Send Transaction
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "sendTransaction",
+  "params": {
+    "from": "kalon1sender...",
+    "to": "kalon1recipient...",
+    "amount": 1000000
+  },
+  "id": 5
+}
+```
+
+For complete API documentation, see [docs/API.md](docs/API.md).
 
 ## 🧪 Testnet
 
-Kalon läuft standardmäßig im Testnet-Modus:
+Kalon Network provides a testnet for development and testing:
+
 - **Chain ID**: 7718
-- **Difficulty**: 1 (sehr einfach)
+- **Difficulty**: 5000 (adjustable)
 - **Block Reward**: 5 tKALON
-- **Block Time**: ~30 Sekunden
+- **Block Time**: ~30 seconds
+- **Symbol**: tKALON
 
-## 📄 Lizenz
+## 🌐 Networks
 
-Siehe [LICENSE](LICENSE) Datei.
+### Testnet
+- **Purpose**: Development and testing
+- **Genesis**: `genesis/testnet.json`
+- **Difficulty**: Lower for faster testing
+- **Wallet Prefix**: `kalon1`
 
-## 🤝 Beitragen
+### Mainnet
+- **Purpose**: Production network
+- **Genesis**: `genesis/mainnet.json`
+- **Difficulty**: Higher for security
+- **Status**: Coming soon
 
-Beiträge sind willkommen! Öffne ein Issue oder sende einen Pull Request.
+### Community Testnet
+- **Purpose**: Community testing
+- **Genesis**: `genesis/community-testnet.json`
+- **Status**: Available
 
-## 📧 Kontakt
+## 🔐 Wallet Management
 
-- **GitHub**: https://github.com/Why-x-Phy/kalon-network
-- **Issues**: https://github.com/Why-x-Phy/kalon-network/issues
+### Create Wallet
+```bash
+./build-v2/kalon-wallet create
+```
+
+### List Wallets
+```bash
+./build-v2/kalon-wallet list
+```
+
+### Recover from Mnemonic
+```bash
+./build-v2/kalon-wallet import
+```
+
+### Check Balance
+```bash
+./build-v2/kalon-wallet balance --address kalon1abc123...
+```
+
+## 💰 Mining
+
+### Start Mining
+```bash
+# Get wallet address
+ADDRESS=$(cat wallet-miner.json | jq -r .address)
+
+# Start mining with 4 threads
+./build-v2/kalon-miner-v2 -wallet "$ADDRESS" -threads 4 -rpc http://localhost:16316
+```
+
+### Mining Rewards
+- Block reward: 5 tKALON (testnet)
+- Reward halves every 259,200 blocks
+- Network and treasury fees collected per block
+
+## 📊 Block Explorer
+
+Kalon includes a built-in block explorer:
+
+```bash
+# Start explorer API
+KALON_RPC_URL="http://localhost:16316" ./build-v2/explorer-api &
+
+# Start web server
+cd explorer/static
+python3 -m http.server 8080 &
+
+# Access at http://localhost:8080
+```
+
+Features:
+- Real-time blockchain statistics
+- Recent blocks and transactions
+- Address and balance lookup
+- Network metrics
+
+## 🔧 Configuration
+
+### Network Configuration
+
+Edit `genesis/testnet.json` to customize:
+- Initial difficulty
+- Block rewards
+- Halving schedule
+- Treasury address
+- Network fees
+
+### Node Configuration
+
+Command-line options:
+```bash
+-datadir string    Data directory (default: "data")
+-genesis string    Genesis config file (required)
+-rpc string        RPC endpoint (default: ":16316")
+-p2p string        P2P endpoint (default: ":17335")
+```
+
+## 🛠️ Development
+
+### Building from Source
+```bash
+# Clone repository
+git clone https://github.com/Why-x-Phy/kalon-network.git
+cd kalon-network
+
+# Install dependencies
+go mod download
+
+# Build all binaries
+make build
+
+# Run tests
+go test ./...
+```
+
+### Contributing
+
+Contributions are welcome! Please:
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
+## 📄 License
+
+See [LICENSE](LICENSE) file for details.
+
+## 🤝 Support
+
+- **Issues**: [GitHub Issues](https://github.com/Why-x-Phy/kalon-network/issues)
+- **Documentation**: Check `docs/` directory
+- **Questions**: Open a discussion on GitHub
+
+## 🗺️ Roadmap
+
+- [ ] Mainnet launch
+- [ ] Enhanced P2P networking
+- [ ] Smart contract support
+- [ ] Mobile wallet
+- [ ] Exchange integrations
+- [ ] Governance system
+
+## 📧 Contact
+
+- **GitHub**: [Why-x-Phy/kalon-network](https://github.com/Why-x-Phy/kalon-network)
+- **Repository**: https://github.com/Why-x-Phy/kalon-network
 
 ---
 
-**Status**: ✅ Funktionierend | Testnet | v2.0
+**Status**: ✅ Active Development | Testnet Live | v2.0
+
+Made with ❤️ by the Kalon Network community
