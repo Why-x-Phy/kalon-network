@@ -164,7 +164,7 @@ func (s *ServerV2) handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Write response
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	// CRITICAL: Manual JSON encoding to prevent circular references
 	jsonBytes, err := json.Marshal(response)
 	if err != nil {
@@ -172,7 +172,7 @@ func (s *ServerV2) handleRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	
+
 	if _, err := w.Write(jsonBytes); err != nil {
 		log.Printf("❌ Failed to write RPC response: %v", err)
 	}
@@ -429,8 +429,8 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 	for _, tx := range block.Txs {
 		txMap := map[string]interface{}{
 			"hash":      hex.EncodeToString(tx.Hash[:]),
-			"from":      tx.From.String(),
-			"to":        tx.To.String(),
+			"from":      hex.EncodeToString(tx.From[:]), // Safe: hex encoding
+			"to":        hex.EncodeToString(tx.To[:]),   // Safe: hex encoding
 			"amount":    tx.Amount,
 			"fee":       tx.Fee,
 			"nonce":     tx.Nonce,
@@ -446,6 +446,16 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 			})
 		}
 		txMap["outputs"] = outputs
+		
+		// Serialize inputs to be complete
+		inputs := make([]interface{}, 0, len(tx.Inputs))
+		for _, input := range tx.Inputs {
+			inputs = append(inputs, map[string]interface{}{
+				"previousTxHash": hex.EncodeToString(input.PreviousTxHash[:]),
+				"index":          input.Index,
+			})
+		}
+		txMap["inputs"] = inputs
 
 		txList = append(txList, txMap)
 	}
