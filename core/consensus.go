@@ -165,13 +165,18 @@ func (cm *ConsensusManager) CalculateDifficulty(height uint64, parent *Block) ui
 		return parent.Header.Difficulty
 	}
 
-	// Get difficulty window (simplified - would need actual block history)
-	// For now, use a simple adjustment based on block time
+	// For blocks < window, keep difficulty stable
+	// This prevents issues during early blocks
 	expectedTime := time.Duration(cm.genesis.BlockTimeTarget) * time.Second
-	actualTime := parent.Header.Timestamp.Sub(time.Unix(0, 0)) // Simplified
-
-	// Calculate adjustment factor
-	adjustmentFactor := float64(expectedTime) / float64(actualTime)
+	
+	// Just return parent difficulty for now (no adjustment during launch)
+	// Once we implement proper LWMA with block history, this will work correctly
+	if height < cm.genesis.Difficulty.Window {
+		return parent.Header.Difficulty
+	}
+	
+	// Keep difficulty stable (no adjustment factor yet)
+	adjustmentFactor := 1.0
 
 	// Apply maximum adjustment limit
 	maxAdjust := float64(cm.genesis.Difficulty.MaxAdjustPerBlockPct) / 100.0

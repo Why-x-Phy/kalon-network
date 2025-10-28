@@ -611,8 +611,13 @@ func (c *ConsensusV2) CalculateDifficultyV2(blockNumber uint64, parent *Block) u
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// For testnet, always use difficulty 1
-	return 1 // Keep difficulty 1 for testnet
+	// Use parent difficulty if available
+	if parent != nil {
+		return parent.Header.Difficulty
+	}
+	
+	// Default difficulty for genesis or fallback
+	return 5000
 }
 
 // CalculateDifficulty calculates difficulty using LWMA
