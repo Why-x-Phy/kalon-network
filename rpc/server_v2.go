@@ -457,10 +457,19 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 }
 
 // handleSubmitBlockV2 handles submitBlock requests professionally
-func (s *ServerV2) handleSubmitBlockV2(req *RPCRequest) *RPCResponse {
+func (s *ServerV2) handleSubmitBlockV2(req *RPCRequest) (response *RPCResponse) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("❌ PANIC in handleSubmitBlockV2: %v", r)
+			response = &RPCResponse{
+				JSONRPC: "2.0",
+				Error: &RPCError{
+					Code:    -32603,
+					Message: "Internal error",
+					Data:    fmt.Sprintf("Panic: %v", r),
+				},
+				ID: req.ID,
+			}
 		}
 	}()
 
