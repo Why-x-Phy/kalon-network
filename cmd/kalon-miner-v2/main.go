@@ -180,6 +180,15 @@ func (m *MinerV2) mineBlock(workerID int) {
 		return
 	}
 
+	// CRITICAL: Check if this template is still valid
+	// If another worker already submitted a block, this template is outdated
+	currentHeight := m.getCurrentHeight()
+	if currentHeight >= block.Header.Number {
+		log.Printf("🔍 Template outdated: current height %d >= template height %d", currentHeight, block.Header.Number)
+		time.Sleep(100 * time.Millisecond) // Short delay before retry
+		return
+	}
+
 	// Mine the block
 	startTime := time.Now()
 	nonce := uint64(0)
@@ -592,6 +601,31 @@ func (m *MinerV2) parseAddress(address string) (core.Address, error) {
 	// Use first 20 bytes of hash
 	copy(addr[:], hash[:20])
 	return addr, nil
+}
+
+// getCurrentHeight gets the current blockchain height
+func (m *MinerV2) getCurrentHeight() uint64 {
+	req := RPCRequest{
+		JSONRPC: "2.0",
+		Method:  "getHeight",
+		Params:  map[string]interface{}{},
+		ID:      999,
+	}
+
+	resp, err := m.blockchain.callRPC(req)
+	if err != nil {
+		return 0
+	}
+
+	if resp.Error != nil {
+		return 0
+	}
+
+	if height, ok := resp.Result.(float64); ok {
+		return uint64(height)
+	}
+
+	return 0
 }
 
 // RPCRequest represents a JSON-RPC request
