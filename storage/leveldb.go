@@ -14,9 +14,10 @@ import (
 
 // LevelDBStorage implements the Storage interface using LevelDB
 type LevelDBStorage struct {
-	db   *leveldb.DB
-	path string
-	mu   sync.RWMutex
+	db     *leveldb.DB
+	path   string
+	mu     sync.RWMutex
+	writeBatch *leveldb.Batch // Batch for atomic writes
 }
 
 // NewLevelDBStorage creates a new LevelDB storage instance
@@ -35,6 +36,7 @@ func NewLevelDBStorage(path string) (*LevelDBStorage, error) {
 	return &LevelDBStorage{
 		db:   db,
 		path: path,
+		writeBatch: new(leveldb.Batch),
 	}, nil
 }
 
@@ -54,7 +56,14 @@ func (s *LevelDBStorage) Put(key, value []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return s.db.Put(key, value, nil)
+	err := s.db.Put(key, value, nil)
+	if err != nil {
+		return err
+	}
+	
+	// Flush to ensure data is written to disk
+	s.db.Sync()
+	return nil
 }
 
 // Get retrieves a value by key
