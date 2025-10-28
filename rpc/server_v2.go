@@ -458,6 +458,12 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 
 // handleSubmitBlockV2 handles submitBlock requests professionally
 func (s *ServerV2) handleSubmitBlockV2(req *RPCRequest) *RPCResponse {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("❌ PANIC in handleSubmitBlockV2: %v", r)
+		}
+	}()
+
 	params, ok := req.Params.(map[string]interface{})
 	if !ok {
 		return &RPCResponse{
@@ -486,6 +492,7 @@ func (s *ServerV2) handleSubmitBlockV2(req *RPCRequest) *RPCResponse {
 	// Parse block data
 	block, err := s.parseBlockData(blockData)
 	if err != nil {
+		log.Printf("❌ Failed to parse block data: %v", err)
 		return &RPCResponse{
 			JSONRPC: "2.0",
 			Error: &RPCError{
@@ -499,6 +506,7 @@ func (s *ServerV2) handleSubmitBlockV2(req *RPCRequest) *RPCResponse {
 
 	// Submit block to blockchain using V2 function
 	if err := s.blockchain.AddBlockV2(block); err != nil {
+		log.Printf("❌ Failed to add block: %v", err)
 		return &RPCResponse{
 			JSONRPC: "2.0",
 			Error: &RPCError{
