@@ -559,9 +559,15 @@ func (bc *BlockchainV2) loadChainFromStorage() {
 			return
 		}
 		bc.blocks = append(bc.blocks, block)
+		
+		// IMPORTANT: Reconstruct UTXOs for each block
+		// This is critical because UTXOs are in-memory and need to be rebuilt
+		for _, tx := range block.Txs {
+			bc.processTransactionUTXOs(&tx, block.Hash)
+		}
 	}
 
-	log.Printf("✅ Loaded blockchain from storage - Height: %d", bc.height)
+	log.Printf("✅ Loaded blockchain from storage - Height: %d, UTXOs restored", bc.height)
 }
 
 // Close closes the blockchain and its storage
