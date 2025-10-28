@@ -165,10 +165,7 @@ func (cm *ConsensusManager) CalculateDifficulty(height uint64, parent *Block) ui
 		return parent.Header.Difficulty
 	}
 
-	// For blocks < window, keep difficulty stable
-	// This prevents issues during early blocks
-	expectedTime := time.Duration(cm.genesis.BlockTimeTarget) * time.Second
-	
+	// For blocks during launch guard, keep difficulty stable
 	// Just return parent difficulty for now (no adjustment during launch)
 	// Once we implement proper LWMA with block history, this will work correctly
 	if height < cm.genesis.Difficulty.Window {
