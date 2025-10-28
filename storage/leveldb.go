@@ -145,12 +145,14 @@ func (s *LevelDBStorage) Iterator(prefix []byte) *LevelDBIterator {
 // BlockStorage handles block storage operations
 type BlockStorage struct {
 	storage *LevelDBStorage
+	Storage *LevelDBStorage // Export for Close()
 }
 
 // NewBlockStorage creates a new block storage
 func NewBlockStorage(storage *LevelDBStorage) *BlockStorage {
 	return &BlockStorage{
 		storage: storage,
+		Storage: storage, // Export for blockchain close
 	}
 }
 
@@ -287,4 +289,12 @@ func (bs *BlockStorage) GetTransaction(hash []byte) (*core.Transaction, error) {
 	}
 
 	return &tx, nil
+}
+
+// Close closes the storage
+func (bs *BlockStorage) Close() error {
+	if bs.storage != nil {
+		return bs.storage.Close()
+	}
+	return nil
 }

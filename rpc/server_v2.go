@@ -39,13 +39,17 @@ type RPCError struct {
 
 // ServerV2 represents a professional RPC server
 type ServerV2 struct {
-	addr        string
-	blockchain  *core.BlockchainV2
-	mu          sync.RWMutex
-	connections map[string]*Connection
-	eventBus    *core.EventBus
-	ctx         context.Context
-	cancel      context.CancelFunc
+	addr            string
+	blockchain      *core.BlockchainV2
+	mu              sync.RWMutex
+	connections     map[string]*Connection
+	eventBus        *core.EventBus
+	ctx             context.Context
+	cancel          context.CancelFunc
+	allowedIPs      map[string]bool    // Whitelist of allowed IPs
+	rateLimits      map[string]*RateLimit // Rate limiting per IP
+	requireAuth     bool                // Whether auth is required
+	authTokens      map[string]bool    // Valid auth tokens
 }
 
 // Connection represents a client connection
@@ -56,17 +60,29 @@ type Connection struct {
 	Requests  int64
 }
 
+// RateLimit tracks rate limiting for an IP
+type RateLimit struct {
+	mu            sync.RWMutex
+	Count         int
+	LastReset     time.Time
+	RequestsPerMin int
+}
+
 // NewServerV2 creates a new professional RPC server
 func NewServerV2(addr string, blockchain *core.BlockchainV2) *ServerV2 {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	server := &ServerV2{
-		addr:        addr,
-		blockchain:  blockchain,
-		connections: make(map[string]*Connection),
-		eventBus:    blockchain.GetEventBus(),
-		ctx:         ctx,
-		cancel:      cancel,
+		addr:           addr,
+		blockchain:     blockchain,
+		connections:    make(map[string]*Connection),
+		eventBus:       blockchain.GetEventBus(),
+		ctx:            ctx,
+		cancel:         cancel,
+		allowedIPs:     make(map[string]bool),
+		rateLimits:     make(map[string]*RateLimit),
+		requireAuth:    false, // For testnet: auth disabled by default
+		authTokens:     make(map[string]bool),
 	}
 
 	// Start connection cleanup routine
@@ -118,9 +134,23 @@ func (s *ServerV2) Stop() {
 
 // handleRequest handles RPC requests professionally
 func (s *ServerV2) handleRequest(w http.ResponseWriter, r *http.Request) {
+	// Extract IP
+	ip := s.extractIP(r)
+	
+	// Check IP whitelist if enabled
+	if len(s.allowedIPs) > 0 && !s.allowedIPs[ip] {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	// Check rate limit
+	if !s.checkRateLimit(ip) {
+		http.Error(w, "Too many requests", http.StatusTooManyRequests)
+		return
+	}
+
 	// Track connection
-	connID := r.RemoteAddr
-	s.trackConnection(connID)
+	s.trackConnection(ip)
 
 	// Parse request
 	var req RPCRequest
@@ -905,5 +935,49 @@ func isHexString(s string) bool {
 			return false
 		}
 	}
+	return true
+}
+
+// extractIP extracts the client IP from the request
+func (s *ServerV2) extractIP(r *http.Request) string {
+	ip := r.Header.Get("X-Forwarded-For")
+	if ip == "" {
+		ip = r.Header.Get("X-Real-Ip")
+	}
+	if ip == "" {
+		ip = strings.Split(r.RemoteAddr, ":")[0]
+	}
+	return ip
+}
+
+// checkRateLimit checks if the request rate is within limits
+func (s *ServerV2) checkRateLimit(ip string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Get or create rate limit for this IP
+	limit, exists := s.rateLimits[ip]
+	if !exists {
+		limit = &RateLimit{
+			Count:         0,
+			LastReset:     time.Now(),
+			RequestsPerMin: 60, // Default: 60 requests per minute
+		}
+		s.rateLimits[ip] = limit
+	}
+
+	// Reset counter if more than a minute has passed
+	if time.Since(limit.LastReset) > time.Minute {
+		limit.Count = 0
+		limit.LastReset = time.Now()
+	}
+
+	// Check if limit exceeded
+	if limit.Count >= limit.RequestsPerMin {
+		return false
+	}
+
+	// Increment counter
+	limit.Count++
 	return true
 }

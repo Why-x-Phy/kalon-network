@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"github.com/kalon-network/kalon/core"
+	"github.com/kalon-network/kalon/network"
 	"github.com/kalon-network/kalon/rpc"
+	"github.com/kalon-network/kalon/storage"
 )
 
 // NodeV2 represents a professional node
@@ -17,6 +19,7 @@ type NodeV2 struct {
 	config     *NodeConfig
 	blockchain *core.BlockchainV2
 	rpcServer  *rpc.ServerV2
+	p2p        *network.P2P
 	running    bool
 }
 
@@ -85,9 +88,20 @@ func (n *NodeV2) Start() error {
 		return err
 	}
 
-	// Create blockchain
-	n.blockchain = core.NewBlockchainV2(genesis)
-	log.Printf("Ô£à Blockchain initialized with height: %d", n.blockchain.GetHeight())
+	// Initialize persistent storage
+	dbPath := n.config.DataDir + "/chaindb"
+	log.Printf("🔧 Initializing persistent storage at %s", dbPath)
+	levelDBStorage, err := storage.NewLevelDBStorage(dbPath)
+	if err != nil {
+		log.Printf("⚠️ Failed to initialize LevelDB: %v. Continuing in-memory mode.", err)
+		// Create blockchain without persistence
+		n.blockchain = core.NewBlockchainV2(genesis, nil)
+	} else {
+		// Create storage persister
+		persister := storage.NewBlockStorage(levelDBStorage)
+		n.blockchain = core.NewBlockchainV2(genesis, persister)
+	}
+	log.Printf("✅ Blockchain initialized with height: %d", n.blockchain.GetHeight())
 
 	// Create RPC server
 	n.rpcServer = rpc.NewServerV2(n.config.RPCAddr, n.blockchain)
@@ -99,10 +113,29 @@ func (n *NodeV2) Start() error {
 		}
 	}()
 
+	// Initialize P2P network
+	p2pConfig := &network.P2PConfig{
+		ListenAddr:   n.config.P2PAddr,
+		SeedNodes:    []string{}, // TODO: Add seed nodes
+		MaxPeers:     50,
+		DialTimeout:  10 * time.Second,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		KeepAlive:    60 * time.Second,
+	}
+	n.p2p = network.NewP2P(p2pConfig)
+
+	// Start P2P server
+	if err := n.p2p.Start(); err != nil {
+		log.Printf("⚠️ Failed to start P2P: %v", err)
+	} else {
+		log.Printf("✅ P2P network started on %s", n.config.P2PAddr)
+	}
+
 	// Wait a moment for server to start
 	time.Sleep(1 * time.Second)
 
-	log.Printf("Ô£à Node started successfully")
+	log.Printf("✅ Node started successfully")
 	n.running = true
 
 	return nil
@@ -121,7 +154,19 @@ func (n *NodeV2) Stop() error {
 		n.rpcServer.Stop()
 	}
 
-	log.Printf("Ô£à Node stopped successfully")
+	// Stop P2P network
+	if n.p2p != nil {
+		n.p2p.Stop()
+	}
+
+	// Close blockchain storage
+	if n.blockchain != nil {
+		if err := n.blockchain.Close(); err != nil {
+			log.Printf("⚠️ Error closing blockchain: %v", err)
+		}
+	}
+
+	log.Printf("✅ Node stopped successfully")
 	n.running = false
 
 	return nil

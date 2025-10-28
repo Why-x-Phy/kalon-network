@@ -21,6 +21,17 @@ type BlockchainV2 struct {
 	stateManager *StateManager
 	utxoSet      *UTXOSet
 	mempool      *Mempool
+	storage      BlockPersister // Interface for persistent storage
+}
+
+// BlockPersister defines the interface for persisting blocks
+type BlockPersister interface {
+	StoreBlock(block *Block) error
+	GetBlockByNumber(number uint64) (*Block, error)
+	GetBlockByHash(hash []byte) (*Block, error)
+	GetBestBlock() (*Block, error)
+	GetBlockCount() (uint64, error)
+	Close() error
 }
 
 // Mempool manages pending transactions
@@ -59,7 +70,7 @@ type DifficultyAdjustment struct {
 }
 
 // NewBlockchainV2 creates a new professional blockchain
-func NewBlockchainV2(genesis *GenesisConfig) *BlockchainV2 {
+func NewBlockchainV2(genesis *GenesisConfig, persister BlockPersister) *BlockchainV2 {
 	bc := &BlockchainV2{
 		blocks:       make([]*Block, 0),
 		height:       0,
@@ -69,11 +80,19 @@ func NewBlockchainV2(genesis *GenesisConfig) *BlockchainV2 {
 		stateManager: NewStateManager(),
 		utxoSet:      NewUTXOSet(),
 		mempool:      NewMempool(),
+		storage:      persister,
 	}
 
-	// Create genesis block
-	genesisBlock := bc.createGenesisBlockV2()
-	bc.addBlockV2(genesisBlock)
+	// Try to load existing chain from storage
+	if bc.storage != nil {
+		bc.loadChainFromStorage()
+	}
+
+	// Create genesis block if chain is empty
+	if bc.height == 0 {
+		genesisBlock := bc.createGenesisBlockV2()
+		bc.addBlockV2(genesisBlock)
+	}
 
 	return bc
 }
@@ -169,6 +188,13 @@ func (bc *BlockchainV2) addBlockV2(block *Block) error {
 		"block":  block,
 		"height": bc.height,
 	})
+
+	// Save to persistent storage if available
+	if bc.storage != nil {
+		if err := bc.storage.StoreBlock(block); err != nil {
+			log.Printf("⚠️ Failed to save block to storage: %v", err)
+		}
+	}
 
 	log.Printf("✅ Block #%d added successfully: %x", block.Header.Number, block.Hash)
 
@@ -498,6 +524,52 @@ func (bc *BlockchainV2) createBlockRewardTransaction(miner Address, amount uint6
 // AddBlock adds a block to the blockchain
 func (bc *BlockchainV2) AddBlock(block *Block) error {
 	return bc.addBlockV2(block)
+}
+
+// loadChainFromStorage loads the blockchain from persistent storage
+func (bc *BlockchainV2) loadChainFromStorage() {
+	if bc.storage == nil {
+		return
+	}
+
+	// Get the best block
+	bestBlock, err := bc.storage.GetBestBlock()
+	if err != nil {
+		log.Printf("⚠️ No existing chain found, starting fresh")
+		return
+	}
+
+	if bestBlock == nil {
+		return
+	}
+
+	// Reconstruct chain by loading blocks from storage
+	bc.height = bestBlock.Header.Number
+	bc.bestBlock = bestBlock
+
+	// Load all blocks from genesis to best block
+	for i := uint64(0); i <= bc.height; i++ {
+		block, err := bc.storage.GetBlockByNumber(i)
+		if err != nil || block == nil {
+			log.Printf("⚠️ Failed to load block %d: %v", i, err)
+			// Reset and start fresh
+			bc.height = 0
+			bc.bestBlock = nil
+			bc.blocks = make([]*Block, 0)
+			return
+		}
+		bc.blocks = append(bc.blocks, block)
+	}
+
+	log.Printf("✅ Loaded blockchain from storage - Height: %d", bc.height)
+}
+
+// Close closes the blockchain and its storage
+func (bc *BlockchainV2) Close() error {
+	if bc.storage != nil {
+		return bc.storage.Close()
+	}
+	return nil
 }
 
 // ValidateProofOfWorkV2 validates proof of work professionally
