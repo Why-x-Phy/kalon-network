@@ -193,6 +193,8 @@ func (bc *BlockchainV2) addBlockV2(block *Block) error {
 	if bc.storage != nil {
 		if err := bc.storage.StoreBlock(block); err != nil {
 			log.Printf("⚠️ Failed to save block to storage: %v", err)
+		} else {
+			log.Printf("✅ Block #%d saved to storage", block.Header.Number)
 		}
 	}
 

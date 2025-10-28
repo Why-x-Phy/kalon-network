@@ -3,6 +3,7 @@ package storage
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"sync"
 
@@ -258,6 +259,7 @@ func (bs *BlockStorage) SetBestBlockHash(hash []byte) error {
 func (bs *BlockStorage) SetBestBlock(block *core.Block) error {
 	bestKey := []byte("best_block")
 	hashData := []byte(fmt.Sprintf("%x", block.Hash))
+	log.Printf("💾 Setting best block - Height: %d, Hash: %x", block.Header.Number, block.Hash)
 	return bs.storage.Put(bestKey, hashData)
 }
 
