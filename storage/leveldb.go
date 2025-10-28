@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"

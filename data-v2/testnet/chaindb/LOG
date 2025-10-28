@@ -1,64 +1,18 @@
 =============== Oct 28, 2025 (CET) ===============
-14:15:54.029086 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
-14:15:54.045603 db@open opening
-14:15:54.045884 version@stat F·[] S·0B[] Sc·[]
-14:15:54.051452 db@janitor F·2 G·0
-14:15:54.051473 db@open done T·5.856373ms
+14:21:35.007691 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+14:21:35.024453 db@open opening
+14:21:35.024933 version@stat F·[] S·0B[] Sc·[]
+14:21:35.034971 db@janitor F·2 G·0
+14:21:35.035016 db@open done T·10.520993ms
 =============== Oct 28, 2025 (CET) ===============
-14:16:34.227310 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
-14:16:34.227381 version@stat F·[] S·0B[] Sc·[]
-14:16:34.227388 db@open opening
-14:16:34.227404 journal@recovery F·1
-14:16:34.227565 journal@recovery recovering @1
-14:16:34.234176 memdb@flush created L0@2 N·92 S·23KiB "bes..ock,v92":"blo..r_9,v28"
-14:16:34.234291 version@stat F·[1] S·23KiB[23KiB] Sc·[0.25]
-14:16:34.254417 db@janitor F·3 G·0
-14:16:34.254429 db@open done T·27.037188ms
-=============== Oct 28, 2025 (CET) ===============
-14:17:26.162531 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
-14:17:26.162672 version@stat F·[1] S·23KiB[23KiB] Sc·[0.25]
-14:17:26.162688 db@open opening
-14:17:26.162712 journal@recovery F·1
-14:17:26.162945 journal@recovery recovering @3
-14:17:26.169395 memdb@flush created L0@5 N·2 S·549B "blo..b89,v94":"blo..r_0,v95"
-14:17:26.169477 version@stat F·[2] S·24KiB[24KiB] Sc·[0.50]
-14:17:26.189782 db@janitor F·4 G·0
-14:17:26.189815 db@open done T·27.120898ms
-=============== Oct 28, 2025 (CET) ===============
-14:17:41.760231 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
-14:17:41.760317 version@stat F·[2] S·24KiB[24KiB] Sc·[0.50]
-14:17:41.760326 db@open opening
-14:17:41.760347 journal@recovery F·1
-14:17:41.760583 journal@recovery recovering @6
-14:17:41.767349 memdb@flush created L0@8 N·2 S·549B "blo..b89,v97":"blo..r_0,v98"
-14:17:41.767423 version@stat F·[3] S·24KiB[24KiB] Sc·[0.75]
-14:17:41.787565 db@janitor F·5 G·0
-14:17:41.787593 db@open done T·27.260957ms
-=============== Oct 28, 2025 (CET) ===============
-14:18:32.453799 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
-14:18:32.453885 version@stat F·[3] S·24KiB[24KiB] Sc·[0.75]
-14:18:32.453894 db@open opening
-14:18:32.453915 journal@recovery F·1
-14:18:32.454127 journal@recovery recovering @9
-14:18:32.460602 memdb@flush created L0@11 N·2 S·549B "blo..b89,v100":"blo..r_0,v101"
-14:18:32.460696 version@stat F·[4] S·25KiB[25KiB] Sc·[1.00]
-14:18:32.480735 db@janitor F·6 G·0
-14:18:32.480749 db@open done T·26.85123ms
-14:18:32.480958 table@compaction L0·4 -> L1·0 S·25KiB Q·102
-14:18:32.487662 table@build created L1@14 N·63 S·21KiB "bes..ock,v92":"blo..r_9,v28"
-14:18:32.487680 version@stat F·[0 1] S·21KiB[0B 21KiB] Sc·[0.00 0.00]
-14:18:32.492156 table@compaction committed F-3 S-3KiB Ke·0 D·35 T·11.174199ms
-14:18:32.492191 table@remove removed @8
-14:18:32.492213 table@remove removed @5
-14:18:32.492239 table@remove removed @2
-=============== Oct 28, 2025 (CET) ===============
-14:18:53.111330 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
-14:18:53.111419 version@stat F·[0 1] S·21KiB[0B 21KiB] Sc·[0.00 0.00]
-14:18:53.111427 db@open opening
-14:18:53.111453 journal@recovery F·1
-14:18:53.111646 journal@recovery recovering @12
-14:18:53.117939 memdb@flush created L0@15 N·2 S·549B "blo..b89,v103":"blo..r_0,v104"
-14:18:53.118063 version@stat F·[1 1] S·22KiB[549B 21KiB] Sc·[0.25 0.00]
-14:18:53.137792 db@janitor F·5 G·1
-14:18:53.137798 db@janitor removing table-11
-14:18:53.137825 db@open done T·26.394522ms
+14:22:05.088330 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+14:22:05.088403 version@stat F·[] S·0B[] Sc·[]
+14:22:05.088411 db@open opening
+14:22:05.088427 journal@recovery F·1
+14:22:05.088699 journal@recovery recovering @1
+14:22:05.095442 memdb@flush created L0@2 N·92 S·24KiB "bes..ock,v92":"blo..r_9,v28"
+14:22:05.095543 version@stat F·[1] S·24KiB[24KiB] Sc·[0.25]
+14:22:05.116097 db@janitor F·3 G·0
+14:22:05.116128 db@open done T·27.707614ms
+14:23:05.086609 db@close closing
+14:23:05.086691 db@close done T·78.66µs
