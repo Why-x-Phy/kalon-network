@@ -159,11 +159,13 @@ func (bc *BlockchainV2) createGenesisBlockV2() *Block {
 
 // addBlockV2 adds a block atomically
 func (bc *BlockchainV2) addBlockV2(block *Block) error {
+	// CRITICAL: Hold lock only for in-memory operations
+	// Storage operations happen AFTER lock release to prevent blocking read operations
 	bc.mu.Lock()
-	defer bc.mu.Unlock()
 
 	// Validate block
 	if err := bc.validateBlockV2(block); err != nil {
+		bc.mu.Unlock()
 		return fmt.Errorf("block validation failed: %v", err)
 	}
 
@@ -174,7 +176,7 @@ func (bc *BlockchainV2) addBlockV2(block *Block) error {
 		bc.mempool.RemoveTransaction(tx.Hash)
 	}
 
-	// Add block atomically
+	// Add block atomically to in-memory structures
 	bc.blocks = append(bc.blocks, block)
 	bc.height = block.Header.Number
 	bc.bestBlock = block
@@ -189,7 +191,12 @@ func (bc *BlockchainV2) addBlockV2(block *Block) error {
 		"height": bc.height,
 	})
 
-	// Save to persistent storage if available
+	// CRITICAL: Release lock BEFORE slow storage operations
+	// This allows createBlockTemplate and other read operations to proceed immediately
+	bc.mu.Unlock()
+
+	// Save to persistent storage AFTER lock release
+	// This I/O operation can take 100-500ms and should not block read operations
 	if bc.storage != nil {
 		if err := bc.storage.StoreBlock(block); err != nil {
 			log.Printf("⚠️ Failed to save block to storage: %v", err)
