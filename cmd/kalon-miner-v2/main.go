@@ -336,6 +336,9 @@ func (rpc *RPCBlockchainV2) CreateNewBlock(miner core.Address, txs []core.Transa
 		ID: 2,
 	}
 
+	// Add small delay to avoid race conditions with submitBlock
+	time.Sleep(10 * time.Millisecond)
+
 	resp, err := rpc.callRPC(req)
 	if err != nil {
 		log.Printf("ÔØî Failed to create block template: %v", err)
