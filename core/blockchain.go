@@ -379,6 +379,11 @@ func (bc *BlockchainV2) GetConsensus() *ConsensusV2 {
 	return bc.consensus
 }
 
+// GetGenesis returns the genesis configuration
+func (bc *BlockchainV2) GetGenesis() *GenesisConfig {
+	return bc.genesis
+}
+
 // GetEventBus returns the event bus
 func (bc *BlockchainV2) GetEventBus() *EventBus {
 	return bc.eventBus

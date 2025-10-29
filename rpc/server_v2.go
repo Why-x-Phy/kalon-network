@@ -785,8 +785,9 @@ func (s *ServerV2) handleGetMiningInfo(req *RPCRequest) *RPCResponse {
 		}
 	}
 
-	consensus := s.blockchain.GetConsensus()
-	difficulty := consensus.CalculateDifficultyV2(bestBlock.Header.Number+1, bestBlock)
+	// Use ConsensusManager to calculate difficulty (uses Genesis config)
+	consensusManager := core.NewConsensusManager(s.blockchain.GetGenesis())
+	difficulty := consensusManager.CalculateDifficulty(bestBlock.Header.Number+1, bestBlock)
 
 	return &RPCResponse{
 		JSONRPC: "2.0",
