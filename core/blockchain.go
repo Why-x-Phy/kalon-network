@@ -114,7 +114,7 @@ func NewStateManager() *StateManager {
 // NewConsensusV2 creates a new consensus mechanism
 func NewConsensusV2() *ConsensusV2 {
 	return &ConsensusV2{
-		difficulty: 1,             // Use initial difficulty from genesis config
+		difficulty: 10,            // Default difficulty for testnet
 		target:     1 << (64 - 1), // 1 difficulty = 2^63 target
 		blockTime:  30 * time.Second,
 		adjustment: NewDifficultyAdjustment(),
@@ -616,8 +616,8 @@ func (c *ConsensusV2) CalculateDifficultyV2(blockNumber uint64, parent *Block) u
 		return parent.Header.Difficulty
 	}
 
-	// Default difficulty for genesis or fallback
-	return 5000
+	// Default difficulty for genesis or fallback (should match testnet config)
+	return 10
 }
 
 // CalculateDifficulty calculates difficulty using LWMA
