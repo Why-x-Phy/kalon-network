@@ -435,8 +435,9 @@ func (bc *BlockchainV2) CreateNewBlockV2(miner Address, txs []Transaction) *Bloc
 		return nil
 	}
 
-	// Calculate difficulty
-	difficulty := bc.consensus.CalculateDifficultyV2(parent.Header.Number+1, parent)
+	// Calculate difficulty using ConsensusManager (uses Genesis config)
+	consensusManager := NewConsensusManager(bc.genesis)
+	difficulty := consensusManager.CalculateDifficulty(parent.Header.Number+1, parent)
 
 	// Create block reward transaction
 	blockReward := bc.calculateBlockReward(parent.Header.Number + 1)
