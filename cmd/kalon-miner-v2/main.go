@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -559,25 +560,77 @@ func (rpc *RPCBlockchainV2) AddBlock(block *core.Block) error {
 	return nil
 }
 
-// callRPC makes an RPC call
+// callRPC makes an RPC call with retry logic
 func (rpc *RPCBlockchainV2) callRPC(req RPCRequest) (*RPCResponse, error) {
 	jsonData, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := rpc.client.Post(rpc.rpcURL, "application/json", bytes.NewBuffer(jsonData))
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
+	maxRetries := 3
+	var lastErr error
+	var lastResp *http.Response
 
-	var rpcResp RPCResponse
-	if err := json.NewDecoder(resp.Body).Decode(&rpcResp); err != nil {
-		return nil, err
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			// Exponential backoff: 50ms, 100ms, 200ms
+			time.Sleep(time.Duration(50*attempt) * time.Millisecond)
+		}
+
+		resp, err := rpc.client.Post(rpc.rpcURL, "application/json", bytes.NewBuffer(jsonData))
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		// Read full response body first
+		bodyBytes, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			lastErr = err
+			lastResp = resp
+			continue
+		}
+
+		// Check if response is valid JSON
+		if len(bodyBytes) == 0 {
+			lastErr = fmt.Errorf("empty response body")
+			lastResp = resp
+			continue
+		}
+
+		// Check if response starts with '{' (valid JSON)
+		previewLen := len(bodyBytes)
+		if previewLen > 100 {
+			previewLen = 100
+		}
+		if len(bodyBytes) > 0 && (bodyBytes[0] != '{' && bodyBytes[0] != '[') {
+			lastErr = fmt.Errorf("invalid JSON response (starts with '%c'): %s", bodyBytes[0], string(bodyBytes[:previewLen]))
+			lastResp = resp
+			continue
+		}
+
+		// Try to decode JSON
+		var rpcResp RPCResponse
+		previewLen2 := len(bodyBytes)
+		if previewLen2 > 200 {
+			previewLen2 = 200
+		}
+		if err := json.Unmarshal(bodyBytes, &rpcResp); err != nil {
+			lastErr = fmt.Errorf("JSON decode error: %v, response: %s", err, string(bodyBytes[:previewLen2]))
+			lastResp = resp
+			continue
+		}
+
+		// Success!
+		return &rpcResp, nil
 	}
 
-	return &rpcResp, nil
+	// All retries failed
+	if lastResp != nil {
+		return nil, fmt.Errorf("RPC call failed after %d attempts, last error: %v (status: %d)", maxRetries, lastErr, lastResp.StatusCode)
+	}
+	return nil, fmt.Errorf("RPC call failed after %d attempts, last error: %v", maxRetries, lastErr)
 }
 
 // parseAddress parses a wallet address
