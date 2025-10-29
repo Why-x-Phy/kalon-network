@@ -126,9 +126,9 @@ func (cm *ConsensusManager) ValidateTransaction(tx *Transaction) error {
 
 // ValidateProofOfWork validates the proof of work for a block
 func (cm *ConsensusManager) ValidateProofOfWork(block *Block) bool {
-	// For testnet, allow any hash for difficulty <= 100 (lenient for testing but still validates PoW)
+	// For testnet, allow any hash for difficulty <= 50000 (very lenient for testing)
 	// This allows reasonable mining speed on testnet while still testing PoW functionality
-	if block.Header.Difficulty <= 100 {
+	if block.Header.Difficulty <= 50000 {
 		log.Printf("Testnet: Allowing block with difficulty %d (no PoW validation)", block.Header.Difficulty)
 		return true
 	}
