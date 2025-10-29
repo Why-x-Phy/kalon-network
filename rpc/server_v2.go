@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -134,6 +135,31 @@ func (s *ServerV2) Stop() {
 
 // handleRequest handles RPC requests professionally
 func (s *ServerV2) handleRequest(w http.ResponseWriter, r *http.Request) {
+	// CRITICAL: Panic recovery to prevent server crashes
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("❌ PANIC in handleRequest: %v\nStack trace: %s", rec, debug.Stack())
+			
+			// Try to write error response
+			w.Header().Set("Content-Type", "application/json")
+			errorResponse := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"error": map[string]interface{}{
+					"code":    -32603,
+					"message": "Internal error",
+					"data":    fmt.Sprintf("Panic: %v", rec),
+				},
+				"id": nil,
+			}
+			if jsonBytes, err := json.Marshal(errorResponse); err == nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write(jsonBytes)
+			} else {
+				http.Error(w, "Internal server error", http.StatusInternalServerError)
+			}
+		}
+	}()
+
 	// Extract IP
 	ip := s.extractIP(r)
 
@@ -166,10 +192,28 @@ func (s *ServerV2) handleRequest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	// CRITICAL: Manual JSON encoding to prevent circular references
+	// Wrap in additional safety check
 	jsonBytes, err := json.Marshal(response)
 	if err != nil {
 		log.Printf("❌ Failed to marshal RPC response: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		log.Printf("❌ Response type: %T, Response: %+v", response, response)
+		
+		// Write safe error response instead of crashing
+		errorResponse := map[string]interface{}{
+			"jsonrpc": "2.0",
+			"error": map[string]interface{}{
+				"code":    -32603,
+				"message": "Internal error",
+				"data":    fmt.Sprintf("JSON marshal error: %v", err),
+			},
+			"id": req.ID,
+		}
+		if safeBytes, safeErr := json.Marshal(errorResponse); safeErr == nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write(safeBytes)
+		} else {
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
 		return
 	}
 

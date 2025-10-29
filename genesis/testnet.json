@@ -5,20 +5,16 @@
   "blockTimeTargetSeconds": 30,
   "maxSupply": 1000000000,
   "initialBlockReward": 5.0,
-  "halvingSchedule": [
-    { "afterBlocks": 259200, "rewardMultiplier": 0.5 },
-    { "afterBlocks": 777600, "rewardMultiplier": 0.25 },
-    { "afterBlocks": 1814400, "rewardMultiplier": 0.125 }
-  ],
+  "halvingSchedule": [],
   "difficulty": {
     "algo": "LWMA",
     "window": 120,
-    "initialDifficulty": 5000,
+    "initialDifficulty": 10,
     "maxAdjustPerBlockPct": 25,
     "launchGuard": {
-      "enabled": true,
+      "enabled": false,
       "durationHours": 24,
-      "difficultyFloorMultiplier": 4.0,
+      "difficultyFloorMultiplier": 1.0,
       "initialReward": 2.0
     }
   },
