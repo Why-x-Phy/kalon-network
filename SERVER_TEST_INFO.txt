@@ -1,0 +1,22 @@
+=== LOKALE TEST-UMGEBUNG ===
+Go Version: go1.23.2 linux/amd64
+System: Linux 6.8.0-86-generic x86_64
+OS: Ubuntu
+
+=== WICHTIGE VERGLEICHE ===
+1. Go Version prüfen: go version
+2. System Info: uname -a
+3. Test-Script verwenden: ./test-exact-match.sh
+
+=== WAS FUNKTIONIERT LOKAL ===
+- Node startet erfolgreich
+- createBlockTemplate gibt gültige JSON zurück
+- Panic-Handler ist aktiv
+- Error-Handling verbessert
+
+=== FALLS ES AUF SERVER NICHT FUNKTIONIERT ===
+1. Prüfe Go Version (muss >= 1.20 sein)
+2. Prüfe ob alle Binaries neu gebaut wurden
+3. Prüfe Node-Logs auf Panic-Meldungen
+4. Prüfe ob curl/jq installiert sind
+5. Verwende test-exact-match.sh für exakten Vergleich
