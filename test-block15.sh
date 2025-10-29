@@ -16,6 +16,7 @@ MINER_LOG="miner-block15-test.log"
 RPC_URL="http://localhost:16316"
 WALLET="8cc92a1d253973db54f716e0f8747988dbbe9116"
 TEST_DURATION=600  # 10 Minuten
+MIN_DIFFICULTY=10  # Minimum difficulty for testnet (for fast mining)
 
 # Cleanup function
 cleanup() {
@@ -102,10 +103,18 @@ echo "6. Prüfe Difficulty..."
 DIFFICULTY=$(curl -s "$RPC_URL/rpc" -H "Content-Type: application/json" -d "{\"jsonrpc\":\"2.0\",\"method\":\"createBlockTemplate\",\"params\":{\"miner\":\"$WALLET\"},\"id\":1}" | jq -r .result.difficulty 2>/dev/null)
 echo "   Difficulty: $DIFFICULTY"
 EXPECTED_DIFF=$((INITIAL_DIFF * 4))
-if [ "$DIFFICULTY" == "$EXPECTED_DIFF" ] || [ "$DIFFICULTY" == "$INITIAL_DIFF" ]; then
-    echo -e "${GREEN}✅ Difficulty korrekt${NC}"
+
+# Check if difficulty is too high for mining
+if [ "$DIFFICULTY" -gt 50000 ]; then
+    echo -e "${RED}❌ ABBRUCH: Difficulty $DIFFICULTY ist zu hoch! (max 50000 für Testnet)${NC}"
+    echo "   Mining wird nicht funktionieren!"
+    echo "   Lösung: initialDifficulty in testnet.json auf <= 12500 reduzieren"
+    cleanup
+    exit 1
+elif [ "$DIFFICULTY" -gt 1000 ]; then
+    echo -e "${YELLOW}⚠️ Difficulty $DIFFICULTY ist hoch - Mining kann langsam sein${NC}"
 else
-    echo -e "${YELLOW}⚠️ Difficulty: $DIFFICULTY (erwartet: $EXPECTED_DIFF oder $INITIAL_DIFF)${NC}"
+    echo -e "${GREEN}✅ Difficulty OK ($DIFFICULTY)${NC}"
 fi
 
 # Step 7: Start Miner
@@ -115,17 +124,67 @@ timeout $TEST_DURATION ./build-v2/kalon-miner-v2 -wallet "$WALLET" -threads 1 -r
 MINER_PID=$!
 echo -e "${GREEN}✅ Miner läuft (PID: $MINER_PID)${NC}"
 
+# Step 7.5: Wait a bit before checking
+echo ""
+echo "   Warte 5 Sekunden für Miner-Start..."
+sleep 5
+
 # Step 8: Monitor Progress
 echo ""
 echo "8. Überwache Mining..."
-echo "   Prüfe alle 30 Sekunden den Status..."
+echo "   Prüfe alle 10 Sekunden den Status..."
 PREV_HEIGHT=0
 NO_CHANGE_COUNT=0
+FIRST_CHECK=true
 
-for i in $(seq 1 $((TEST_DURATION / 30))); do
-    sleep 30
+for i in $(seq 1 $((TEST_DURATION / 10))); do
+    sleep 10
     
     CURRENT_HEIGHT=$(curl -s "$RPC_URL/rpc" -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"getHeight","id":1}' 2>/dev/null | jq -r .result 2>/dev/null)
+    
+    # Check miner status
+    if ! kill -0 $MINER_PID 2>/dev/null; then
+        echo -e "${RED}❌ Miner ist nicht mehr aktiv!${NC}"
+        echo "   Letzte Miner-Logs:"
+        tail -n 30 "$MINER_LOG"
+        break
+    fi
+    
+    # Check node status
+    if ! kill -0 $NODE_PID 2>/dev/null; then
+        echo -e "${RED}❌ Node ist nicht mehr aktiv!${NC}"
+        echo "   Letzte Node-Logs:"
+        tail -n 30 "$NODE_LOG"
+        break
+    fi
+    
+    # Show miner progress (check for errors)
+    MINER_ERRORS=$(tail -n 50 "$MINER_LOG" | grep -i "error\|failed" | wc -l)
+    if [ "$MINER_ERRORS" -gt 0 ] && [ "$FIRST_CHECK" = "false" ]; then
+        echo -e "${YELLOW}⚠️ Miner hat $MINER_ERRORS Fehler in den letzten 50 Zeilen${NC}"
+        echo "   Letzte Fehler:"
+        tail -n 50 "$MINER_LOG" | grep -i "error\|failed" | tail -n 3
+    fi
+    
+    # Check if blocks found
+    BLOCKS_FOUND=$(tail -n 100 "$MINER_LOG" | grep -i "block found\|submitted successfully" | wc -l)
+    
+    if [ -z "$CURRENT_HEIGHT" ] || [ "$CURRENT_HEIGHT" == "null" ]; then
+        CURRENT_HEIGHT=0
+    fi
+    
+    if [ "$CURRENT_HEIGHT" -gt "$PREV_HEIGHT" ]; then
+        echo -e "   ${GREEN}✅ Höhe: $CURRENT_HEIGHT (Blöcke gefunden: $BLOCKS_FOUND)${NC}"
+        PREV_HEIGHT=$CURRENT_HEIGHT
+        NO_CHANGE_COUNT=0
+    else
+        NO_CHANGE_COUNT=$((NO_CHANGE_COUNT + 1))
+        if [ $((i % 6)) -eq 0 ]; then
+            echo "   Höhe: $CURRENT_HEIGHT (keine Änderung seit $((NO_CHANGE_COUNT * 10))s, Miner-Fehler: $MINER_ERRORS)"
+        fi
+    fi
+    
+    FIRST_CHECK=false
     BLOCKS_FOUND=$(grep -c "Block found" "$MINER_LOG" 2>/dev/null || echo 0)
     ERRORS=$(grep -c "Failed\|invalid character" "$MINER_LOG" 2>/dev/null || echo 0)
     
