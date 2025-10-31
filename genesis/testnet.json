@@ -9,7 +9,7 @@
   "difficulty": {
     "algo": "LWMA",
     "window": 120,
-    "initialDifficulty": 10,
+    "initialDifficulty": 15,
     "maxAdjustPerBlockPct": 25,
     "launchGuard": {
       "enabled": false,

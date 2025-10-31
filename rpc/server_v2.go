@@ -139,7 +139,7 @@ func (s *ServerV2) handleRequest(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		if rec := recover(); rec != nil {
 			log.Printf("❌ PANIC in handleRequest: %v\nStack trace: %s", rec, debug.Stack())
-			
+
 			// Try to write error response
 			w.Header().Set("Content-Type", "application/json")
 			errorResponse := map[string]interface{}{
@@ -197,7 +197,7 @@ func (s *ServerV2) handleRequest(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("❌ Failed to marshal RPC response: %v", err)
 		log.Printf("❌ Response type: %T, Response: %+v", response, response)
-		
+
 		// Write safe error response instead of crashing
 		errorResponse := map[string]interface{}{
 			"jsonrpc": "2.0",
@@ -1061,6 +1061,12 @@ func (s *ServerV2) extractIP(r *http.Request) string {
 
 // checkRateLimit checks if the request rate is within limits
 func (s *ServerV2) checkRateLimit(ip string) bool {
+	// CRITICAL: Allow unlimited requests from localhost FIRST (before any locking)
+	// This prevents rate limiting during local testing
+	if ip == "127.0.0.1" || ip == "::1" {
+		return true
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -1070,7 +1076,7 @@ func (s *ServerV2) checkRateLimit(ip string) bool {
 		limit = &RateLimit{
 			Count:          0,
 			LastReset:      time.Now(),
-			RequestsPerMin: 60, // Default: 60 requests per minute
+			RequestsPerMin: 600, // Increased to 600 requests per minute for testing
 		}
 		s.rateLimits[ip] = limit
 	}

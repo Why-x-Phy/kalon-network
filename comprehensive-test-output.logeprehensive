@@ -1,0 +1,74 @@
+=== UMFASSENDER LANGZEIT-TEST ===
+Dauer: 1 Stunde
+Ziel: Block 200
+
+1. Cleanup...
+
+=== CLEANUP ===
+✅ Prozesse beendet
+[0;32m✅ Cleanup abgeschlossen[0m
+
+2. Konfiguriere Genesis für schnelles Mining...
+[0;32m✅ Genesis konfiguriert (Difficulty: 15)[0m
+
+3. Baue Binaries...
+[0;32m✅ Binaries gebaut[0m
+
+4. Starte Node...
+[0;32m✅ Node läuft (PID: 517076)[0m
+
+5. Erstelle Wallets...
+[1;33m⚠️ Verwende Standard-Wallet 1[0m
+[1;33m⚠️ Verwende Standard-Wallet 2[0m
+Wallet 1: 8cc92a1d253973db54f716e0f8747988dbbe9116
+Wallet 2: a1b2c3d4e5f6789012345678901234567890abcd
+[0;32m✅ Wallets erstellt[0m
+
+6. Starte Miner mit 2 Threads für Wallet 1...
+[0;32m✅ Miner läuft (PID: 517121)[0m
+
+7. Starte Monitoring (1 Stunde)...
+   Prüfe alle 60 Sekunden...
+[1;33m⚠️ 10 neue Fehler gefunden (Total: 10)[0m
+2025/10/29 21:12:53 ÔØî Failed to create block template
+2025/10/29 21:12:54 ÔØî Failed to create block template: RPC call failed after 3 attempts, last error: invalid JSON response (starts with 'T'): Too many requests
+2025/10/29 21:12:54 ÔØî Failed to create block template
+
+[0;32m📊 Status nach 0 Minuten:[0m
+   Höhe: 30 / 200
+   Wallet 1 Balance: 150000000
+   Wallet 2 Balance: 0
+   Fehler: 10
+[1;33m⚠️ 36 neue Fehler gefunden (Total: 46)[0m
+2025/10/29 21:13:52 ÔØî Failed to create block template
+2025/10/29 21:13:53 ÔØî Failed to create block template: RPC call failed after 3 attempts, last error: invalid JSON response (starts with 'T'): Too many requests
+2025/10/29 21:13:53 ÔØî Failed to create block template
+
+[0;32m📊 Status nach 1 Minuten:[0m
+   Höhe: 45 / 200
+   Wallet 1 Balance: 225000000
+   Wallet 2 Balance: 0
+   Fehler: 46
+./test-comprehensive-long.sh: Zeile 168: 517076 Getötet                ./build-v2/kalon-node-v2 -datadir "$DATA_DIR" -genesis genesis/testnet.json -rpc :16316 -p2p :17335 > "$NODE_LOG" 2>&1
+./test-comprehensive-long.sh: Zeile 168: 517121 Getötet                timeout $TEST_DURATION ./build-v2/kalon-miner-v2 -wallet "$WALLET1" -threads 2 -rpc "$RPC_URL" > "$MINER_LOG" 2>&1
+[0;31m❌ Node abgestürzt![0m
+2025/10/29 21:13:19 ­ƒÜÇ Starting Professional Kalon Node v2.0
+2025/10/29 21:13:19    Data Dir: data-comprehensive-test
+2025/10/29 21:13:19    Genesis: genesis/testnet.json
+2025/10/29 21:13:19    RPC: :16316
+2025/10/29 21:13:19    P2P: :17335
+2025/10/29 21:13:19 ✅ Loaded genesis from genesis/testnet.json
+2025/10/29 21:13:19 🔧 Initializing persistent storage at data-comprehensive-test/chaindb
+2025/10/29 21:13:19 🔍 DEBUG: loadChainFromStorage called
+2025/10/29 21:13:19 🔍 DEBUG: Getting best block from storage
+2025/10/29 21:13:19 ⚠️ Best block is nil, starting fresh
+2025/10/29 21:13:19 ✅ Block #0 saved to storage
+2025/10/29 21:13:19 ✅ Block #0 added successfully: 7310a129f320c34df91ce1ae7a7b66a5d8da3c72cc7173943ff23f980017012e
+2025/10/29 21:13:19 ✅ Blockchain initialized with height: 0
+2025/10/29 21:13:19 ⚠️ Failed to start P2P: failed to start listener: listen tcp :17335: bind: address already in use
+2025/10/29 21:13:19 🚀 Professional RPC Server starting on :16316
+2025/10/29 21:13:19 RPC Server error: listen tcp :16316: bind: address already in use
+2025/10/29 21:13:20 ✅ Node started successfully
+
+=== CLEANUP ===
+✅ Prozesse beendet
