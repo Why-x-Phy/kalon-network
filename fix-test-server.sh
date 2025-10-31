@@ -18,10 +18,13 @@ echo "✅ Prozesse gestoppt"
 echo ""
 
 # 2. ENTFERNE lokale Binaries BEVOR git pull (verhindert Konflikte)
-echo "2. Entferne lokale Binaries (BEVOR git pull)..."
+echo "2. Entferne lokale Binaries und Script-Änderungen (BEVOR git pull)..."
 rm -f build-v2/kalon-node-v2 build-v2/kalon-miner-v2 build-v2/kalon-wallet 2>/dev/null || true
-rm -f test-quick-10min.sh check-rpc-status.sh update-and-test.sh 2>/dev/null || true
-echo "✅ Lokale Binaries und Scripts entfernt"
+# Entferne lokale Script-Änderungen
+git checkout -- test-quick-10min.sh check-rpc-status.sh fix-test-server.sh update-and-test.sh 2>/dev/null || true
+# Stashe falls git checkout nicht funktioniert
+git stash push -m "Lokale Änderungen vor git pull" 2>/dev/null || true
+echo "✅ Lokale Binaries und Script-Änderungen entfernt"
 echo ""
 
 # 3. Git Pull (JETZT sollte es funktionieren)
