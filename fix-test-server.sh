@@ -6,49 +6,64 @@ echo ""
 
 cd ~/kalon-network
 
-# 1. Stashe lokale Binary-Änderungen
-echo "1. Stashe lokale Binary-Änderungen..."
-git stash push -m "Lokale Binary vor git pull" build-v2/kalon-node-v2 2>/dev/null || true
-echo "✅ Gestasht"
-echo ""
-
-# 2. Git Pull
-echo "2. Git Pull..."
-git pull origin master
-echo "✅ Repository aktualisiert"
-echo ""
-
-# 3. Node neu bauen
-echo "3. Node neu bauen..."
-go build -o build-v2/kalon-node-v2 ./cmd/kalon-node-v2
-if [ $? -ne 0 ]; then
-    echo "❌ Build fehlgeschlagen!"
-    exit 1
-fi
-echo "✅ Node gebaut"
-echo ""
-
-# 4. Ausführbar machen
-echo "4. Ausführbar machen..."
-chmod +x build-v2/kalon-node-v2
-chmod +x test-quick-10min.sh
-echo "✅ Ausführbar gemacht"
-echo ""
-
-# 5. Alte Prozesse beenden
-echo "5. Alte Prozesse beenden..."
+# 1. Stoppe laufende Prozesse
+echo "1. Stoppe laufende Prozesse..."
 killall -9 kalon-node-v2 kalon-miner-v2 2>/dev/null || true
 pkill -9 -f test-quick 2>/dev/null || true
 sleep 2
-echo "✅ Prozesse bereinigt"
+
+# 2. Entferne lokale Binaries (werden neu gebaut)
+echo "2. Entferne lokale Binaries..."
+rm -f build-v2/kalon-node-v2 build-v2/kalon-miner-v2 build-v2/kalon-wallet 2>/dev/null || true
+echo "✅ Lokale Binaries entfernt"
 echo ""
 
-# 6. Test starten
-echo "6. Test starten..."
-./test-quick-10min.sh > test-output.log 2>&1 &
-TEST_PID=$!
-echo "✅ Test gestartet (PID: $TEST_PID)"
+# 3. Git Pull
+echo "3. Git Pull..."
+git pull origin master || {
+    echo "❌ Git pull fehlgeschlagen"
+    exit 1
+}
+echo "✅ Repository aktualisiert"
 echo ""
 
-echo "Test läuft im Hintergrund."
-echo "Prüfe Status mit: tail -f test-output.log"
+# 4. Setze Ausführungsrechte für Scripts
+echo "4. Setze Ausführungsrechte für Scripts..."
+chmod +x test-quick-10min.sh check-rpc-status.sh fix-test-server.sh update-and-test.sh 2>/dev/null || true
+echo "✅ Scripts ausführbar gemacht"
+echo ""
+
+# 5. Baue Binaries
+echo "5. Baue Binaries..."
+go build -o build-v2/kalon-node-v2 ./cmd/kalon-node-v2 || {
+    echo "❌ Node Build fehlgeschlagen"
+    exit 1
+}
+echo "✅ Node gebaut"
+
+go build -o build-v2/kalon-miner-v2 ./cmd/kalon-miner-v2 || {
+    echo "❌ Miner Build fehlgeschlagen"
+    exit 1
+}
+echo "✅ Miner gebaut"
+
+go build -o build-v2/kalon-wallet ./cmd/kalon-wallet || {
+    echo "❌ Wallet Build fehlgeschlagen"
+    exit 1
+}
+echo "✅ Wallet gebaut"
+echo ""
+
+# 6. Setze Ausführungsrechte für Binaries
+echo "6. Setze Ausführungsrechte für Binaries..."
+chmod +x build-v2/kalon-node-v2 build-v2/kalon-miner-v2 build-v2/kalon-wallet 2>/dev/null || true
+echo "✅ Binaries ausführbar gemacht"
+echo ""
+
+echo "✅ Fix abgeschlossen!"
+echo ""
+echo "Jetzt Test starten:"
+echo "  ./test-quick-10min.sh > test-output.log 2>&1 &"
+echo ""
+echo "Status prüfen:"
+echo "  ./check-rpc-status.sh"
