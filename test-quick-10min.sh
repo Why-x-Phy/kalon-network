@@ -17,17 +17,22 @@ MINER_LOG="miner-quick-test.log"
 
 # Cleanup function
 cleanup() {
-    echo ""
-    echo "=== CLEANUP ==="
-    killall -9 kalon-node-v2 kalon-miner-v2 2>/dev/null || true
-    pkill -9 -f "test-quick|timeout.*kalon" 2>/dev/null || true
-    sleep 2
-    lsof -ti:16316 -ti:17335 2>/dev/null | xargs kill -9 2>/dev/null || true
-    sleep 2
-    echo "✅ Prozesse beendet"
+    # Nur aufrufen wenn Script wirklich beendet wird (nicht bei normalem Exit)
+    if [ "${CLEANUP_ENABLED:-false}" = "true" ]; then
+        echo ""
+        echo "=== CLEANUP ==="
+        killall -9 kalon-node-v2 kalon-miner-v2 2>/dev/null || true
+        pkill -9 -f "test-quick|timeout.*kalon" 2>/dev/null || true
+        sleep 2
+        lsof -ti:16316 -ti:17335 2>/dev/null | xargs kill -9 2>/dev/null || true
+        sleep 2
+        echo "✅ Prozesse beendet"
+    fi
 }
 
-trap cleanup EXIT
+# Nur cleanup bei normalem Exit, nicht bei Signalen
+CLEANUP_ENABLED=true
+trap cleanup EXIT INT TERM
 
 echo "=== SCHNELLER 10-MINUTEN-TEST ==="
 echo "Dauer: 10 Minuten"
