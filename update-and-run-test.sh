@@ -1,5 +1,5 @@
 #!/bin/bash
-# Fix für Test-Server - macht ALLES automatisch
+# Komplettes Update und Test-Script - macht ALLES automatisch
 
 set -e  # Stoppt bei Fehlern
 
@@ -8,10 +8,10 @@ cd ~/kalon-network || {
     exit 1
 }
 
-echo "=== FIX FÜR TEST-SERVER ==="
+echo "=== KOMPLETTES UPDATE UND TEST ==="
 echo ""
 
-# 1. Stoppe laufende Prozesse
+# 1. Stoppe alle laufenden Prozesse
 echo "1. Stoppe laufende Prozesse..."
 killall -9 kalon-node-v2 kalon-miner-v2 2>/dev/null || true
 pkill -9 -f test-quick 2>/dev/null || true
@@ -75,10 +75,32 @@ chmod +x build-v2/kalon-node-v2 build-v2/kalon-miner-v2 build-v2/kalon-wallet 2>
 echo "✅ Binaries ausführbar gemacht"
 echo ""
 
-echo "✅ Fix abgeschlossen!"
+# 8. Starte Test im Hintergrund mit nohup
+echo "8. Starte Test..."
+nohup ./test-quick-10min.sh > test-output.log 2>&1 &
+TEST_PID=$!
+sleep 3
+
+# 9. Prüfe ob Test läuft
+if ps -p $TEST_PID > /dev/null 2>&1; then
+    echo "✅ Test läuft (PID: $TEST_PID)"
+else
+    echo "⚠️ Test-Prozess läuft nicht mehr - prüfe Logs"
+    tail -n 30 test-output.log
+    exit 1
+fi
 echo ""
-echo "Jetzt Test starten:"
-echo "  nohup ./test-quick-10min.sh > test-output.log 2>&1 &"
+
+echo "=== UPDATE ABGESCHLOSSEN ==="
 echo ""
-echo "ODER verwende update-and-run-test.sh:"
-echo "  ./update-and-run-test.sh"
+echo "Test läuft im Hintergrund (PID: $TEST_PID)"
+echo ""
+echo "Monitor-Befehle:"
+echo "  tail -f test-output.log           # Live-Log"
+echo "  ./check-rpc-status.sh             # Status prüfen"
+echo "  ps aux | grep test-quick          # Prozess prüfen"
+echo ""
+echo "Test stoppen:"
+echo "  killall -9 kalon-node-v2 kalon-miner-v2"
+echo "  pkill -9 -f test-quick"
+
