@@ -4,21 +4,27 @@
 echo "=== FIX FÜR TEST-SERVER ==="
 echo ""
 
-cd ~/kalon-network
+cd ~/kalon-network || {
+    echo "❌ Verzeichnis ~/kalon-network nicht gefunden!"
+    exit 1
+}
 
 # 1. Stoppe laufende Prozesse
 echo "1. Stoppe laufende Prozesse..."
 killall -9 kalon-node-v2 kalon-miner-v2 2>/dev/null || true
 pkill -9 -f test-quick 2>/dev/null || true
 sleep 2
-
-# 2. Entferne lokale Binaries (werden neu gebaut)
-echo "2. Entferne lokale Binaries..."
-rm -f build-v2/kalon-node-v2 build-v2/kalon-miner-v2 build-v2/kalon-wallet 2>/dev/null || true
-echo "✅ Lokale Binaries entfernt"
+echo "✅ Prozesse gestoppt"
 echo ""
 
-# 3. Git Pull
+# 2. ENTFERNE lokale Binaries BEVOR git pull (verhindert Konflikte)
+echo "2. Entferne lokale Binaries (BEVOR git pull)..."
+rm -f build-v2/kalon-node-v2 build-v2/kalon-miner-v2 build-v2/kalon-wallet 2>/dev/null || true
+rm -f test-quick-10min.sh check-rpc-status.sh update-and-test.sh 2>/dev/null || true
+echo "✅ Lokale Binaries und Scripts entfernt"
+echo ""
+
+# 3. Git Pull (JETZT sollte es funktionieren)
 echo "3. Git Pull..."
 git pull origin master || {
     echo "❌ Git pull fehlgeschlagen"
