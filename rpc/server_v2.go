@@ -52,6 +52,7 @@ type ServerV2 struct {
 	rateLimits  map[string]*RateLimit // Rate limiting per IP
 	requireAuth bool                  // Whether auth is required
 	authTokens  map[string]bool       // Valid auth tokens
+	server      *http.Server          // HTTP server instance for shutdown
 }
 
 // Connection represents a client connection
