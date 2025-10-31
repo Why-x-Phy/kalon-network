@@ -112,18 +112,27 @@ func (s *ServerV2) Start() error {
 
 	log.Printf("🚀 Professional RPC Server starting on %s", s.addr)
 
+	// Store server reference for shutdown BEFORE starting
+	s.server = server
+
 	// Start server in goroutine
+	started := make(chan bool, 1)
 	go func() {
+		log.Printf("🔧 Attempting to bind to %s", s.addr)
+		started <- true
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("RPC Server error: %v", err)
+			log.Printf("❌ RPC Server error: %v", err)
 		}
 	}()
 
-	// Store server reference for shutdown
-	s.server = server
+	// Wait for goroutine to start
+	<-started
 
-	// Give server time to start and bind to port
-	time.Sleep(200 * time.Millisecond)
+	// Give server time to bind to port (increased timeout)
+	time.Sleep(1 * time.Second)
+	
+	// Log success
+	log.Printf("✅ RPC Server should be listening on %s", s.addr)
 
 	// Handle shutdown in background (non-blocking)
 	go func() {

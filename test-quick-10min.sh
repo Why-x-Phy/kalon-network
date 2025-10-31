@@ -66,29 +66,35 @@ if ! kill -0 $NODE_PID 2>/dev/null; then
     exit 1
 fi
 
-# Wait for RPC to be ready (mit Timeout)
+# Wait for RPC to be ready (mit Timeout und Port-Check)
 echo "   Warte auf RPC-Server..."
 RPC_READY=false
-for i in {1..30}; do
-    # Teste RPC mit Timeout (2 Sekunden)
-    if timeout 2 curl -s "$RPC_URL/rpc" -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"getHeight","id":1}' > /dev/null 2>&1; then
-        # Prüfe ob Port wirklich belegt ist
-        if command -v ss >/dev/null 2>&1; then
-            if ss -tlnp 2>/dev/null | grep -q 16316; then
-                RPC_READY=true
-                break
-            fi
-        elif command -v netstat >/dev/null 2>&1; then
-            if netstat -tlnp 2>/dev/null | grep -q 16316; then
-                RPC_READY=true
-                break
-            fi
-        else
-            # Fallback: Versuche einfach RPC-Zugriff
+for i in {1..60}; do
+    # ZUERST: Prüfe ob Port belegt ist (schneller als curl)
+    PORT_READY=false
+    if command -v ss >/dev/null 2>&1; then
+        if ss -tlnp 2>/dev/null | grep -q 16316; then
+            PORT_READY=true
+        fi
+    elif command -v netstat >/dev/null 2>&1; then
+        if netstat -tlnp 2>/dev/null | grep -q 16316; then
+            PORT_READY=true
+        fi
+    fi
+    
+    # DANN: Teste RPC mit Timeout (2 Sekunden) - NUR wenn Port belegt ist
+    if [ "$PORT_READY" = true ]; then
+        if timeout 2 curl -s "$RPC_URL/rpc" -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"getHeight","id":1}' > /dev/null 2>&1; then
             RPC_READY=true
             break
         fi
     fi
+    
+    # Status alle 5 Sekunden anzeigen
+    if [ $((i % 5)) -eq 0 ]; then
+        echo "   Warte auf RPC... ($i/60)"
+    fi
+    
     sleep 1
 done
 
