@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"runtime/debug"
 	"strings"
@@ -120,14 +119,27 @@ func (s *ServerV2) Start() error {
 		}
 	}()
 
-	// Wait for context cancellation
-	<-s.ctx.Done()
+	// Store server reference for shutdown
+	s.server = server
 
-	// Graceful shutdown
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	// Give server time to start and bind to port
+	time.Sleep(200 * time.Millisecond)
 
-	return server.Shutdown(ctx)
+	// Handle shutdown in background (non-blocking)
+	go func() {
+		<-s.ctx.Done()
+		// Graceful shutdown
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if s.server != nil {
+			if err := s.server.Shutdown(ctx); err != nil {
+				log.Printf("⚠️ Error shutting down RPC server: %v", err)
+			}
+		}
+	}()
+
+	// Return immediately (non-blocking)
+	return nil
 }
 
 // Stop stops the RPC server
