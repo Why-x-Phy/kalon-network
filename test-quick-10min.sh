@@ -66,19 +66,49 @@ if ! kill -0 $NODE_PID 2>/dev/null; then
     exit 1
 fi
 
-# Wait for RPC to be ready
-for i in {1..20}; do
-    if curl -s "$RPC_URL/rpc" -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"getHeight","id":1}' > /dev/null 2>&1; then
-        echo -e "${GREEN}✅ Node läuft (PID: $NODE_PID)${NC}"
-        break
-    fi
-    if [ $i -eq 20 ]; then
-        echo -e "${RED}❌ RPC nicht erreichbar!${NC}"
-        tail -n 30 "$NODE_LOG"
-        exit 1
+# Wait for RPC to be ready (mit Timeout)
+echo "   Warte auf RPC-Server..."
+RPC_READY=false
+for i in {1..30}; do
+    # Teste RPC mit Timeout (2 Sekunden)
+    if timeout 2 curl -s "$RPC_URL/rpc" -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"getHeight","id":1}' > /dev/null 2>&1; then
+        # Prüfe ob Port wirklich belegt ist
+        if command -v ss >/dev/null 2>&1; then
+            if ss -tlnp 2>/dev/null | grep -q 16316; then
+                RPC_READY=true
+                break
+            fi
+        elif command -v netstat >/dev/null 2>&1; then
+            if netstat -tlnp 2>/dev/null | grep -q 16316; then
+                RPC_READY=true
+                break
+            fi
+        else
+            # Fallback: Versuche einfach RPC-Zugriff
+            RPC_READY=true
+            break
+        fi
     fi
     sleep 1
 done
+
+if [ "$RPC_READY" = true ]; then
+    echo -e "${GREEN}✅ Node läuft (PID: $NODE_PID)${NC}"
+else
+    echo -e "${RED}❌ RPC nicht erreichbar nach 30 Sekunden!${NC}"
+    echo "   Prüfe Node-Log:"
+    tail -n 30 "$NODE_LOG"
+    echo ""
+    echo "   Prüfe ob Port belegt ist:"
+    if command -v ss >/dev/null 2>&1; then
+        ss -tlnp 2>/dev/null | grep 16316 || echo "   Port 16316 nicht belegt"
+    elif command -v netstat >/dev/null 2>&1; then
+        netstat -tlnp 2>/dev/null | grep 16316 || echo "   Port 16316 nicht belegt"
+    else
+        echo "   Kein Tool zum Prüfen von Ports gefunden"
+    fi
+    exit 1
+fi
 
 # Step 4: Create Wallets
 echo ""
@@ -131,8 +161,8 @@ for i in $(seq 1 $((TEST_DURATION / 30))); do
         exit 1
     fi
     
-    # Get current height
-    HEIGHT=$(curl -s "$RPC_URL/rpc" -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"getHeight","id":1}' 2>/dev/null | jq -r .result 2>/dev/null || echo "0")
+    # Get current height (mit Timeout)
+    HEIGHT=$(timeout 3 curl -s "$RPC_URL/rpc" -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"getHeight","id":1}' 2>/dev/null | jq -r .result 2>/dev/null || echo "0")
     if [ "$HEIGHT" == "null" ] || [ -z "$HEIGHT" ]; then
         HEIGHT=0
     fi
@@ -147,8 +177,8 @@ for i in $(seq 1 $((TEST_DURATION / 30))); do
         fi
     fi
     
-    # Get balance
-    BALANCE1=$(curl -s "$RPC_URL/rpc" -H "Content-Type: application/json" -d "{\"jsonrpc\":\"2.0\",\"method\":\"getBalance\",\"params\":{\"address\":\"$WALLET1\"},\"id\":1}" 2>/dev/null | jq -r .result 2>/dev/null || echo "0")
+    # Get balance (mit Timeout)
+    BALANCE1=$(timeout 3 curl -s "$RPC_URL/rpc" -H "Content-Type: application/json" -d "{\"jsonrpc\":\"2.0\",\"method\":\"getBalance\",\"params\":{\"address\":\"$WALLET1\"},\"id\":1}" 2>/dev/null | jq -r .result 2>/dev/null || echo "0")
     if [ "$BALANCE1" == "null" ] || [ -z "$BALANCE1" ]; then
         BALANCE1=0
     fi
@@ -170,7 +200,7 @@ for i in $(seq 1 $((TEST_DURATION / 30))); do
                 AMOUNT=$((BALANCE1 / 10))
                 echo ""
                 echo -e "${BLUE}📤 Sende Transaktion: $AMOUNT von Wallet1 -> Wallet2${NC}"
-                TX_RESULT=$(curl -s "$RPC_URL/rpc" -H "Content-Type: application/json" -d "{\"jsonrpc\":\"2.0\",\"method\":\"sendTransaction\",\"params\":{\"from\":\"$WALLET1\",\"to\":\"$WALLET2\",\"amount\":$AMOUNT},\"id\":1}")
+                TX_RESULT=$(timeout 5 curl -s "$RPC_URL/rpc" -H "Content-Type: application/json" -d "{\"jsonrpc\":\"2.0\",\"method\":\"sendTransaction\",\"params\":{\"from\":\"$WALLET1\",\"to\":\"$WALLET2\",\"amount\":$AMOUNT},\"id\":1}")
                 if echo "$TX_RESULT" | grep -q '"error"'; then
                     echo -e "${YELLOW}⚠️ Transaktion fehlgeschlagen (normal bei niedrigen Balances)${NC}"
                 else
@@ -201,8 +231,8 @@ done
 # Step 7: Final Results
 echo ""
 echo "=== FINALE ERGEBNISSE ==="
-FINAL_HEIGHT=$(curl -s "$RPC_URL/rpc" -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"getHeight","id":1}' 2>/dev/null | jq -r .result 2>/dev/null || echo "0")
-FINAL_BALANCE1=$(curl -s "$RPC_URL/rpc" -H "Content-Type: application/json" -d "{\"jsonrpc\":\"2.0\",\"method\":\"getBalance\",\"params\":{\"address\":\"$WALLET1\"},\"id\":1}" 2>/dev/null | jq -r .result 2>/dev/null || echo "0")
+FINAL_HEIGHT=$(timeout 3 curl -s "$RPC_URL/rpc" -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"getHeight","id":1}' 2>/dev/null | jq -r .result 2>/dev/null || echo "0")
+FINAL_BALANCE1=$(timeout 3 curl -s "$RPC_URL/rpc" -H "Content-Type: application/json" -d "{\"jsonrpc\":\"2.0\",\"method\":\"getBalance\",\"params\":{\"address\":\"$WALLET1\"},\"id\":1}" 2>/dev/null | jq -r .result 2>/dev/null || echo "0")
 FINAL_ERRORS=$(tail -n 500 "$MINER_LOG" | grep -ic "failed\|error\|invalid character" || echo 0)
 FINAL_BLOCKS=$(tail -n 500 "$MINER_LOG" | grep -ic "block found\|submitted successfully" || echo 0)
 
