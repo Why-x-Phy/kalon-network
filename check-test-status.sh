@@ -1,51 +1,71 @@
 #!/bin/bash
-# Script zum Prüfen des Test-Status auf dem Server
+# Prüft Test-Status auf Test-Server
 
 echo "=== TEST-STATUS PRÜFEN ==="
 echo ""
 
-# 1. Prozesse prüfen
-echo "1. Laufende Prozesse:"
-ps aux | grep -E "kalon-node|kalon-miner|test-quick" | grep -v grep || echo "   Keine Prozesse gefunden"
-echo ""
+cd ~/kalon-network || {
+    echo "❌ Verzeichnis ~/kalon-network nicht gefunden!"
+    exit 1
+}
 
-# 2. Ports prüfen
-echo "2. Ports:"
-netstat -tlnp 2>/dev/null | grep -E "16316|17335" || echo "   Ports 16316/17335 nicht belegt"
-echo ""
-
-# 3. Node erreichbar?
-echo "3. Node erreichbar?"
-HEIGHT=$(curl -s http://localhost:16316/rpc -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"getHeight","id":1}' 2>/dev/null | jq -r .result 2>/dev/null || echo "N/A")
-if [ "$HEIGHT" != "N/A" ] && [ "$HEIGHT" != "null" ]; then
-    echo "   ✅ Node läuft (Höhe: $HEIGHT)"
+# 1. Prüfe ob Test-Prozess läuft
+echo "1. Test-Prozess Status:"
+TEST_PID=$(pgrep -f "test-quick-10min.sh" | head -n 1)
+if [ -n "$TEST_PID" ]; then
+    echo "   ✅ Test läuft (PID: $TEST_PID)"
 else
-    echo "   ❌ Node nicht erreichbar"
+    echo "   ❌ Test läuft nicht"
 fi
 echo ""
 
-# 4. Node-Log prüfen
-echo "4. Node-Log (letzte 20 Zeilen):"
-if [ -f node-quick-test.log ]; then
-    tail -n 20 node-quick-test.log
+# 2. Prüfe Node-Prozess
+echo "2. Node-Prozess Status:"
+NODE_PID=$(pgrep -f "kalon-node-v2" | head -n 1)
+if [ -n "$NODE_PID" ]; then
+    echo "   ✅ Node läuft (PID: $NODE_PID)"
 else
-    echo "   Node-Log nicht gefunden"
+    echo "   ❌ Node läuft nicht"
 fi
 echo ""
 
-# 5. Miner-Log prüfen
-echo "5. Miner-Log - Fehler (letzte 30 Zeilen):"
-if [ -f miner-quick-test.log ]; then
-    tail -n 30 miner-quick-test.log | grep -E "Failed|Error|error|invalid" | tail -n 15 || tail -n 30 miner-quick-test.log | tail -n 15
+# 3. Prüfe Miner-Prozess
+echo "3. Miner-Prozess Status:"
+MINER_PID=$(pgrep -f "kalon-miner-v2" | head -n 1)
+if [ -n "$MINER_PID" ]; then
+    echo "   ✅ Miner läuft (PID: $MINER_PID)"
 else
-    echo "   Miner-Log nicht gefunden"
+    echo "   ❌ Miner läuft nicht"
 fi
 echo ""
 
-# 6. Test-Output prüfen
-echo "6. Test-Output (letzte 30 Zeilen):"
+# 4. Prüfe Test-Output-Log
+echo "4. Test-Output-Log (letzte 30 Zeilen):"
 if [ -f test-output.log ]; then
     tail -n 30 test-output.log
 else
-    echo "   Test-Output nicht gefunden"
+    echo "   ❌ test-output.log nicht gefunden"
 fi
+echo ""
+
+# 5. Prüfe Node-Log auf Fehler
+echo "5. Node-Log - Fehler (letzte 20 Zeilen):"
+if [ -f node-quick-test.log ]; then
+    tail -n 20 node-quick-test.log | grep -i "error\|failed\|panic" || echo "   Keine Fehler gefunden"
+else
+    echo "   ❌ node-quick-test.log nicht gefunden"
+fi
+echo ""
+
+# 6. Prüfe ob Port belegt ist
+echo "6. Port 16316 Status:"
+if command -v ss >/dev/null 2>&1; then
+    ss -tlnp 2>/dev/null | grep 16316 || echo "   ❌ Port 16316 nicht belegt"
+elif command -v netstat >/dev/null 2>&1; then
+    netstat -tlnp 2>/dev/null | grep 16316 || echo "   ❌ Port 16316 nicht belegt"
+else
+    echo "   ⚠️ Kein Tool zum Prüfen von Ports gefunden"
+fi
+echo ""
+
+echo "=== STATUS PRÜFUNG ABGESCHLOSSEN ==="
