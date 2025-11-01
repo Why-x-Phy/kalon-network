@@ -606,8 +606,9 @@ func (c *ConsensusV2) ValidateProofOfWorkV2(block *Block) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	// For testnet, allow easier validation
-	if block.Header.Difficulty <= 4 {
+	// For testnet, allow easier validation only for very low difficulty (1-20)
+	// Difficulty 21+ requires real PoW validation for fairness and stability
+	if block.Header.Difficulty <= 20 {
 		return true
 	}
 
