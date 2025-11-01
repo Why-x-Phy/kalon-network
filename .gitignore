@@ -39,7 +39,7 @@ Thumbs.db
 
 # Data directories
 data/
-wallet.json
+wallet*.json
 
 # Node modules (for explorer UI)
 explorer/ui/node_modules/
