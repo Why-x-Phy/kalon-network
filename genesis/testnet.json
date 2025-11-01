@@ -2,14 +2,14 @@
   "chainId": 7718,
   "name": "Kalon Testnet",
   "symbol": "tKALON",
-  "blockTimeTargetSeconds": 30,
+  "blockTimeTargetSeconds": 15,
   "maxSupply": 1000000000,
   "initialBlockReward": 5.0,
   "halvingSchedule": [],
   "difficulty": {
     "algo": "LWMA",
     "window": 120,
-    "initialDifficulty": 15,
+    "initialDifficulty": 23,
     "maxAdjustPerBlockPct": 25,
     "launchGuard": {
       "enabled": false,

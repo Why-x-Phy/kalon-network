@@ -116,7 +116,7 @@ func NewConsensusV2() *ConsensusV2 {
 	return &ConsensusV2{
 		difficulty: 10,            // Default difficulty for testnet
 		target:     1 << (64 - 1), // 1 difficulty = 2^63 target
-		blockTime:  30 * time.Second,
+		blockTime:  15 * time.Second,
 		adjustment: NewDifficultyAdjustment(),
 	}
 }
@@ -656,7 +656,7 @@ func (da *DifficultyAdjustment) CalculateDifficulty(blockNumber uint64, parent *
 	avgBlockTime := totalTime / time.Duration(len(da.blockTimes)-1)
 
 	// Target block time
-	targetTime := 30 * time.Second
+	targetTime := 15 * time.Second
 
 	// Calculate adjustment factor
 	adjustmentFactor := float64(targetTime) / float64(avgBlockTime)
