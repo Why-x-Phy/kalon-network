@@ -169,8 +169,15 @@ func (s *ServerV2) Start() error {
 			s.httpsServer = httpsServer
 
 			log.Printf("🔒 HTTPS RPC Server starting on %s", s.httpsAddr)
+			log.Printf("   Certificate: %s", s.certFile)
+			log.Printf("   Key: %s", s.keyFile)
+			
+			// ListenAndServeTLS will validate certificate files on start
+			// If files are missing or invalid, it will return an error
+			// We catch and log it, but don't crash the Node
 			if err := httpsServer.ListenAndServeTLS(s.certFile, s.keyFile); err != nil && err != http.ErrServerClosed {
 				log.Printf("❌ HTTPS RPC Server error: %v", err)
+				log.Printf("   Check if certificate files exist: %s, %s", s.certFile, s.keyFile)
 			}
 		}()
 		time.Sleep(500 * time.Millisecond) // Give HTTPS server time to start
