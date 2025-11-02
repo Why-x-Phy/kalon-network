@@ -1,8 +1,17 @@
-// API Base URL
-const API_BASE = 'http://localhost:8081';
+// RPC Server URL (konfigurierbar)
+const RPC_URL = window.RPC_URL || 'http://localhost:16316';
+const RPC_ENDPOINT = `${RPC_URL}/rpc`;
+
+// Online Status
+let isOnline = false;
+let statusCheckInterval = null;
 
 // Load initial data
 async function init() {
+    // Start online status checking
+    checkConnectionStatus();
+    statusCheckInterval = setInterval(checkConnectionStatus, 5000); // Check every 5 seconds
+    
     await loadNetworkStats();
     await loadBlocks();
     // Auto-refresh every 10 seconds
@@ -12,42 +21,116 @@ async function init() {
     }, 10000);
 }
 
+// Check connection status (for green/red indicator)
+async function checkConnectionStatus() {
+    try {
+        const response = await fetch(RPC_ENDPOINT, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                jsonrpc: '2.0',
+                method: 'getHeight',
+                id: 1
+            })
+        });
+        
+        const data = await response.json();
+        if (data.result !== undefined) {
+            updateOnlineStatus(true);
+        } else {
+            updateOnlineStatus(false);
+        }
+    } catch (error) {
+        console.error('Connection check failed:', error);
+        updateOnlineStatus(false);
+    }
+}
+
+// Update online status indicator
+function updateOnlineStatus(online) {
+    isOnline = online;
+    const statusIndicator = document.getElementById('onlineStatus');
+    if (statusIndicator) {
+        statusIndicator.className = online ? 'status-online' : 'status-offline';
+        statusIndicator.textContent = online ? '● ONLINE' : '● OFFLINE';
+    }
+}
+
+// Call RPC method
+async function callRPC(method, params = {}) {
+    try {
+        const response = await fetch(RPC_ENDPOINT, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                jsonrpc: '2.0',
+                method: method,
+                params: params,
+                id: 1
+            })
+        });
+        
+        const data = await response.json();
+        if (data.error) {
+            throw new Error(data.error.message || 'RPC Error');
+        }
+        return data.result;
+    } catch (error) {
+        console.error(`RPC call failed (${method}):`, error);
+        throw error;
+    }
+}
+
 // Load network stats
 async function loadNetworkStats() {
     try {
-        const response = await fetch(`${API_BASE}/network/stats`);
-        const data = await response.json();
+        const height = await callRPC('getHeight');
+        const miningInfo = await callRPC('getMiningInfo');
         
-        if (data.success) {
-            const stats = data.data;
-            
-            // Update all stat values
-            document.getElementById('statHeight').textContent = stats.blockHeight || 0;
-            document.getElementById('statHashrate').textContent = formatHashrate(stats.networkHashRate);
-            document.getElementById('statTotalBlocks').textContent = stats.totalBlocks || 0;
-            document.getElementById('statDifficulty').textContent = formatNumber(stats.difficulty);
-            document.getElementById('statPeers').textContent = stats.peers || 0;
-            document.getElementById('statTotalTxs').textContent = stats.totalTxs || 0;
-            document.getElementById('statPendingTxs').textContent = stats.mempoolSize || 0;
-        }
+        // Update stats
+        document.getElementById('statHeight').textContent = height || 0;
+        document.getElementById('statTotalBlocks').textContent = height || 0;
+        document.getElementById('statDifficulty').textContent = formatNumber(miningInfo?.difficulty || 0);
+        document.getElementById('statPeers').textContent = '0'; // TODO: Get from RPC
+        document.getElementById('statTotalTxs').textContent = '0'; // TODO: Get from RPC
+        document.getElementById('statPendingTxs').textContent = '0'; // TODO: Get from RPC
+        document.getElementById('statHashrate').textContent = '0 H/s'; // TODO: Calculate from difficulty
+        
     } catch (error) {
         console.error('Error loading network stats:', error);
+        updateOnlineStatus(false);
     }
 }
 
 // Load recent blocks
 async function loadBlocks() {
     try {
-        const response = await fetch(`${API_BASE}/blocks?limit=20`);
-        const data = await response.json();
+        const height = await callRPC('getHeight');
+        const bestBlock = await callRPC('getBestBlock');
         
-        if (data.success && data.data) {
-            renderBlocks(data.data);
+        if (!bestBlock || height === 0) {
+            renderBlocks([]);
+            return;
         }
+        
+        // For now, show only the best block
+        // TODO: Load more blocks via RPC when available
+        const blocks = [{
+            number: bestBlock.number || height,
+            hash: bestBlock.hash || '',
+            txCount: bestBlock.txCount || 0,
+            timestamp: bestBlock.timestamp ? new Date(bestBlock.timestamp * 1000) : new Date()
+        }];
+        
+        renderBlocks(blocks);
     } catch (error) {
         console.error('Error loading blocks:', error);
-        // Fallback to mock data
-        renderMockBlocks();
+        updateOnlineStatus(false);
+        renderBlocks([]);
     }
 }
 
@@ -66,7 +149,7 @@ function renderBlocks(blocks) {
         return;
     }
     
-            tbody.innerHTML = blocks.map(block => `
+    tbody.innerHTML = blocks.map(block => `
         <tr>
             <td>#${block.number}</td>
             <td>
@@ -80,20 +163,12 @@ function renderBlocks(blocks) {
     `).join('');
 }
 
-// Render mock blocks (fallback)
-function renderMockBlocks() {
-    const mockBlocks = [
-        { number: 1, hash: '0x1234567890abcdef1234567890abcdef12345678', txCount: 1, timestamp: new Date() },
-        { number: 2, hash: '0xabcdef1234567890abcdef1234567890abcdef12', txCount: 0, timestamp: new Date(Date.now() - 12000) },
-        { number: 3, hash: '0x9876543210fedcba9876543210fedcba98765432', txCount: 2, timestamp: new Date(Date.now() - 24000) },
-    ];
-    
-    renderBlocks(mockBlocks);
-}
-
 // Format hash for display
 function formatHash(hash) {
     if (!hash) return 'N/A';
+    if (typeof hash === 'string' && hash.length > 20) {
+        return hash.substring(0, 10) + '...' + hash.substring(hash.length - 10);
+    }
     return hash.startsWith('0x') ? hash : `0x${hash}`;
 }
 
@@ -101,13 +176,13 @@ function formatHash(hash) {
 function formatAge(timestamp) {
     if (!timestamp) return 'N/A';
     
-    const date = new Date(timestamp);
+    const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
     const now = new Date();
     const diff = Math.floor((now - date) / 1000);
     
-    if (diff < 60) return `${diff}s`;
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ${diff % 60}s`;
-    return `${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m`;
+    if (diff < 60) return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ${diff % 60}s ago`;
+    return `${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m ago`;
 }
 
 // Format hashrate
@@ -123,8 +198,6 @@ function formatNumber(num) {
     if (!num) return '0';
     return num.toLocaleString();
 }
-
-// View block details (now handled by block.html)
 
 // Initialize on page load
 init();

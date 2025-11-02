@@ -13,16 +13,19 @@
             <div class="logo">
                 <h1><a href="index.html" style="color: inherit; text-decoration: none;">Kalon Explorer</a></h1>
             </div>
-            <nav class="nav">
-                <a href="index.html">Explorer</a>
-                <a href="stats.html">Stats</a>
-            </nav>
-            <div class="search">
-                <input type="text" placeholder="Search blocks, transactions or wallet addresses">
-                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="11" cy="11" r="8"></circle>
-                    <path d="m21 21-4.35-4.35"></path>
-                </svg>
+            <div class="header-right">
+                <div id="onlineStatus" class="status-offline">● OFFLINE</div>
+                <nav class="nav">
+                    <a href="index.html">Explorer</a>
+                    <a href="stats.html">Stats</a>
+                </nav>
+                <div class="search">
+                    <input type="text" placeholder="Search blocks, transactions or wallet addresses">
+                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                </div>
             </div>
         </div>
     </header>
@@ -87,50 +90,167 @@
     </section>
 
     <script>
+        // RPC Server URL (konfigurierbar)
+        const RPC_URL = window.RPC_URL || 'http://localhost:16316';
+        const RPC_ENDPOINT = `${RPC_URL}/rpc`;
+
+        // Online Status
+        let statusCheckInterval = null;
+
+        // Check connection status (for green/red indicator)
+        async function checkConnectionStatus() {
+            try {
+                const response = await fetch(RPC_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        jsonrpc: '2.0',
+                        method: 'getHeight',
+                        id: 1
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.result !== undefined) {
+                    updateOnlineStatus(true);
+                } else {
+                    updateOnlineStatus(false);
+                }
+            } catch (error) {
+                console.error('Connection check failed:', error);
+                updateOnlineStatus(false);
+            }
+        }
+
+        // Update online status indicator
+        function updateOnlineStatus(online) {
+            const statusIndicator = document.getElementById('onlineStatus');
+            if (statusIndicator) {
+                statusIndicator.className = online ? 'status-online' : 'status-offline';
+                statusIndicator.textContent = online ? '● ONLINE' : '● OFFLINE';
+            }
+        }
+
+        // Call RPC method
+        async function callRPC(method, params = {}) {
+            try {
+                const response = await fetch(RPC_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        jsonrpc: '2.0',
+                        method: method,
+                        params: params,
+                        id: 1
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.error) {
+                    throw new Error(data.error.message || 'RPC Error');
+                }
+                return data.result;
+            } catch (error) {
+                console.error(`RPC call failed (${method}):`, error);
+                throw error;
+            }
+        }
+
         // Get block hash from URL
         const params = new URLSearchParams(window.location.search);
         const hash = params.get('h');
         
+        // Start online status checking
+        checkConnectionStatus();
+        statusCheckInterval = setInterval(checkConnectionStatus, 5000);
+        
         if (hash) {
-            // Load block details
-            fetch(`http://localhost:8081/blocks/${hash}`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success && data.data) {
-                        renderBlock(data.data);
-                    } else {
-                        renderMockBlock();
-                    }
-                })
-                .catch(err => {
-                    console.error(err);
-                    renderMockBlock();
-                });
+            // Load block details from RPC
+            loadBlockDetails(hash);
         } else {
             renderMockBlock();
         }
+
+        async function loadBlockDetails(blockHash) {
+            try {
+                // Try to get block by hash
+                const block = await callRPC('getBlockByHash', { hash: blockHash });
+                
+                if (block) {
+                    renderBlock(block);
+                } else {
+                    // Fallback: try to get best block
+                    const bestBlock = await callRPC('getBestBlock');
+                    if (bestBlock) {
+                        renderBlock(bestBlock);
+                    } else {
+                        renderMockBlock();
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading block:', error);
+                updateOnlineStatus(false);
+                renderMockBlock();
+            }
+        }
         
         function renderBlock(block) {
-            document.getElementById('blockTitle').textContent = `Block ${block.number}`;
-            document.getElementById('blockHash').textContent = block.hash;
-            document.getElementById('parentHash').innerHTML = `<a href="block.html?h=${block.parentHash}" class="hash-link">${block.parentHash}</a>`;
+            document.getElementById('blockTitle').textContent = `Block #${block.number || block.Header?.Number || 'N/A'}`;
+            document.getElementById('blockHash').textContent = formatHash(block.hash || block.Hash || 'N/A');
+            const parentHash = block.parentHash || block.Header?.ParentHash || block.Header?.parentHash || '';
+            if (parentHash) {
+                document.getElementById('parentHash').innerHTML = `<a href="block.html?h=${formatHash(parentHash)}" class="hash-link">${formatHash(parentHash)}</a>`;
+            } else {
+                document.getElementById('parentHash').textContent = 'Genesis block';
+            }
             document.getElementById('blockReward').textContent = '5.00 tKALON';
-            document.getElementById('difficulty').textContent = block.difficulty;
-            document.getElementById('timestamp').textContent = new Date(block.timestamp).toLocaleString();
-            document.getElementById('miner').innerHTML = `<a href="#" class="hash-link">${block.miner}</a>`;
-            document.getElementById('nonce').textContent = block.nonce;
+            document.getElementById('difficulty').textContent = block.difficulty || block.Header?.Difficulty || 'N/A';
+            
+            const timestamp = block.timestamp || block.Header?.Timestamp;
+            if (timestamp) {
+                const date = timestamp instanceof Date ? timestamp : new Date(timestamp * 1000);
+                document.getElementById('timestamp').textContent = date.toLocaleString();
+            } else {
+                document.getElementById('timestamp').textContent = 'N/A';
+            }
+            
+            const miner = block.miner || block.Header?.Miner || '';
+            if (miner) {
+                document.getElementById('miner').innerHTML = `<a href="#" class="hash-link">${formatHash(miner)}</a>`;
+            } else {
+                document.getElementById('miner').textContent = 'N/A';
+            }
+            
+            document.getElementById('nonce').textContent = block.nonce || block.Header?.Nonce || 'N/A';
             
             // Render transactions
-            if (block.transactions && block.transactions.length > 0) {
-                document.getElementById('txTable').innerHTML = block.transactions.map(tx => `
+            const transactions = block.transactions || block.Txs || [];
+            if (transactions.length > 0) {
+                document.getElementById('txTable').innerHTML = transactions.map(tx => `
                     <tr>
-                        <td><a href="#" class="hash-link">${tx.hash}</a></td>
-                        <td><a href="#" class="hash-link">${tx.from}</a></td>
-                        <td><a href="#" class="hash-link">${tx.to}</a></td>
-                        <td>${(tx.amount / 1000000).toFixed(2)} tKALON</td>
+                        <td><a href="#" class="hash-link">${formatHash(tx.hash || tx.Hash || 'N/A')}</a></td>
+                        <td><a href="#" class="hash-link">${formatHash(tx.from || tx.From || 'N/A')}</a></td>
+                        <td><a href="#" class="hash-link">${formatHash(tx.to || tx.To || 'N/A')}</a></td>
+                        <td>${(tx.amount || tx.Amount || 0) / 1000000} tKALON</td>
                     </tr>
                 `).join('');
             }
+        }
+        
+        function formatHash(hash) {
+            if (!hash) return 'N/A';
+            if (typeof hash === 'object') {
+                // Convert byte array to hex
+                return Array.from(hash).map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 20) + '...';
+            }
+            if (typeof hash === 'string' && hash.length > 20) {
+                return hash.substring(0, 10) + '...' + hash.substring(hash.length - 10);
+            }
+            return hash.startsWith('0x') ? hash : `0x${hash}`;
         }
         
         function renderMockBlock() {

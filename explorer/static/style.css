@@ -38,6 +38,36 @@ body {
     gap: 32px;
 }
 
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+}
+
+/* Online Status Indicator */
+#onlineStatus {
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: all 0.3s ease;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+}
+
+.status-online {
+    background: rgba(0, 255, 0, 0.1);
+    border: 1px solid rgba(0, 255, 0, 0.3);
+    color: #00ff00;
+}
+
+.status-offline {
+    background: rgba(255, 0, 0, 0.1);
+    border: 1px solid rgba(255, 0, 0, 0.3);
+    color: #ff0000;
+}
+
 .logo h1 {
     font-size: 24px;
     font-weight: 800;

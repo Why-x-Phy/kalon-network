@@ -158,6 +158,18 @@ func (s *ServerV2) Stop() {
 
 // handleRequest handles RPC requests professionally
 func (s *ServerV2) handleRequest(w http.ResponseWriter, r *http.Request) {
+	// CORS headers for browser access (Explorer)
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Access-Control-Max-Age", "3600")
+
+	// Handle preflight OPTIONS request
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	// CRITICAL: Panic recovery to prevent server crashes
 	defer func() {
 		if rec := recover(); rec != nil {
