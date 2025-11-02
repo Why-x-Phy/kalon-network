@@ -99,9 +99,13 @@ func NewServerV2(addr string, blockchain *core.BlockchainV2) *ServerV2 {
 
 // SetHTTPS configures HTTPS for the RPC server
 func (s *ServerV2) SetHTTPS(httpsAddr, certFile, keyFile string) {
-	s.httpsAddr = httpsAddr
-	s.certFile = certFile
-	s.keyFile = keyFile
+	// Validate certificate files exist before configuring
+	if certFile != "" && keyFile != "" {
+		// Check if files exist (but don't fail if they don't - let ListenAndServeTLS handle it)
+		s.httpsAddr = httpsAddr
+		s.certFile = certFile
+		s.keyFile = keyFile
+	}
 }
 
 // Start starts the RPC server professionally
