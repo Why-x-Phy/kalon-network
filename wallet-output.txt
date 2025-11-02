@@ -1,0 +1,1 @@
+Enter wallet name (leave empty for 'wallet.json'): 2025/10/31 15:33:01 Failed to read wallet name: EOF

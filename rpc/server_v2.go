@@ -41,6 +41,9 @@ type RPCError struct {
 // ServerV2 represents a professional RPC server
 type ServerV2 struct {
 	addr        string
+	httpsAddr   string                 // HTTPS server address (e.g. ":16317")
+	certFile    string                 // SSL certificate file path
+	keyFile     string                 // SSL private key file path
 	blockchain  *core.BlockchainV2
 	mu          sync.RWMutex
 	connections map[string]*Connection
@@ -52,6 +55,7 @@ type ServerV2 struct {
 	requireAuth bool                  // Whether auth is required
 	authTokens  map[string]bool       // Valid auth tokens
 	server      *http.Server          // HTTP server instance for shutdown
+	httpsServer *http.Server          // HTTPS server instance for shutdown
 }
 
 // Connection represents a client connection
@@ -91,6 +95,13 @@ func NewServerV2(addr string, blockchain *core.BlockchainV2) *ServerV2 {
 	go server.cleanupConnections()
 
 	return server
+}
+
+// SetHTTPS configures HTTPS for the RPC server
+func (s *ServerV2) SetHTTPS(httpsAddr, certFile, keyFile string) {
+	s.httpsAddr = httpsAddr
+	s.certFile = certFile
+	s.keyFile = keyFile
 }
 
 // Start starts the RPC server professionally
@@ -134,6 +145,34 @@ func (s *ServerV2) Start() error {
 	// Log success
 	log.Printf("✅ RPC Server should be listening on %s", s.addr)
 
+	// Start HTTPS server if configured
+	if s.httpsAddr != "" && s.certFile != "" && s.keyFile != "" {
+		go func() {
+			httpsMux := http.NewServeMux()
+			httpsMux.HandleFunc("/", s.handleRequest)
+			httpsMux.HandleFunc("/health", s.handleHealth)
+			httpsMux.HandleFunc("/rpc", s.handleRequest)
+
+			httpsServer := &http.Server{
+				Addr:           s.httpsAddr,
+				Handler:        s.limitConnections(httpsMux),
+				ReadTimeout:    30 * time.Second,
+				WriteTimeout:   30 * time.Second,
+				IdleTimeout:    60 * time.Second,
+				MaxHeaderBytes: 1 << 20, // 1MB
+			}
+
+			s.httpsServer = httpsServer
+
+			log.Printf("🔒 HTTPS RPC Server starting on %s", s.httpsAddr)
+			if err := httpsServer.ListenAndServeTLS(s.certFile, s.keyFile); err != nil && err != http.ErrServerClosed {
+				log.Printf("❌ HTTPS RPC Server error: %v", err)
+			}
+		}()
+		time.Sleep(500 * time.Millisecond) // Give HTTPS server time to start
+		log.Printf("✅ HTTPS RPC Server should be listening on %s", s.httpsAddr)
+	}
+
 	// Handle shutdown in background (non-blocking)
 	go func() {
 		<-s.ctx.Done()
@@ -142,7 +181,12 @@ func (s *ServerV2) Start() error {
 		defer cancel()
 		if s.server != nil {
 			if err := s.server.Shutdown(ctx); err != nil {
-				log.Printf("⚠️ Error shutting down RPC server: %v", err)
+				log.Printf("⚠️ Error shutting down HTTP RPC server: %v", err)
+			}
+		}
+		if s.httpsServer != nil {
+			if err := s.httpsServer.Shutdown(ctx); err != nil {
+				log.Printf("⚠️ Error shutting down HTTPS RPC server: %v", err)
 			}
 		}
 	}()

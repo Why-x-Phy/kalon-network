@@ -27,26 +27,35 @@ type NodeV2 struct {
 
 // NodeConfig represents node configuration
 type NodeConfig struct {
-	DataDir string
-	Genesis string
-	RPCAddr string
-	P2PAddr string
+	DataDir   string
+	Genesis   string
+	RPCAddr   string
+	HTTPSAddr string
+	CertFile  string
+	KeyFile   string
+	P2PAddr   string
 }
 
 func main() {
 	var (
-		dataDir = flag.String("datadir", "data/testnet", "Data directory")
-		genesis = flag.String("genesis", "genesis/testnet.json", "Genesis file")
-		rpcAddr = flag.String("rpc", ":16316", "RPC server address")
-		p2pAddr = flag.String("p2p", ":17335", "P2P server address")
+		dataDir   = flag.String("datadir", "data/testnet", "Data directory")
+		genesis   = flag.String("genesis", "genesis/testnet.json", "Genesis file")
+		rpcAddr   = flag.String("rpc", ":16316", "RPC server address")
+		httpsAddr = flag.String("https", "", "HTTPS server address (e.g. :16317)")
+		certFile  = flag.String("certfile", "", "SSL certificate file path")
+		keyFile   = flag.String("keyfile", "", "SSL private key file path")
+		p2pAddr   = flag.String("p2p", ":17335", "P2P server address")
 	)
 	flag.Parse()
 
 	config := &NodeConfig{
-		DataDir: *dataDir,
-		Genesis: *genesis,
-		RPCAddr: *rpcAddr,
-		P2PAddr: *p2pAddr,
+		DataDir:   *dataDir,
+		Genesis:   *genesis,
+		RPCAddr:   *rpcAddr,
+		HTTPSAddr: *httpsAddr,
+		CertFile:  *certFile,
+		KeyFile:   *keyFile,
+		P2PAddr:   *p2pAddr,
 	}
 
 	node := NewNodeV2(config)
@@ -107,6 +116,12 @@ func (n *NodeV2) Start() error {
 
 	// Create RPC server
 	n.rpcServer = rpc.NewServerV2(n.config.RPCAddr, n.blockchain)
+
+	// Configure HTTPS if provided
+	if n.config.HTTPSAddr != "" && n.config.CertFile != "" && n.config.KeyFile != "" {
+		n.rpcServer.SetHTTPS(n.config.HTTPSAddr, n.config.CertFile, n.config.KeyFile)
+		log.Printf("🔒 HTTPS RPC configured: %s (cert: %s, key: %s)", n.config.HTTPSAddr, n.config.CertFile, n.config.KeyFile)
+	}
 
 	// Start RPC server
 	go func() {

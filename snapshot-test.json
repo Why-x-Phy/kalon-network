@@ -1,0 +1,10 @@
+{
+  "height": 45,
+  "timestamp": 1762098461,
+  "blockHash": "0000002ee54178c3dd21f5c58953c92c07c89145920c1d6e8c25a6fab3ed5058",
+  "balances": {
+    "e62e26fbdf281c652fdab47cba81ee0993544372": 225000000
+  },
+  "totalSupply": 225000000,
+  "chainId": 7718
+}

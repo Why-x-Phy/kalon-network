@@ -1,0 +1,49 @@
+{
+  "chainId": 7718,
+  "name": "Kalon Testnet Stage 2",
+  "symbol": "tKALON",
+  "blockTimeTargetSeconds": 15,
+  "maxSupply": 1000000000,
+  "initialBlockReward": 5.0,
+  "halvingSchedule": [],
+  "difficulty": {
+    "algo": "LWMA",
+    "window": 120,
+    "initialDifficulty": 28,
+    "maxAdjustPerBlockPct": 25,
+    "launchGuard": {
+      "enabled": false,
+      "durationHours": 24,
+      "difficultyFloorMultiplier": 1.0,
+      "initialReward": 2.0
+    }
+  },
+  "addressFormat": {
+    "type": "bech32",
+    "hrp": "tkalon"
+  },
+  "premine": {
+    "enabled": false
+  },
+  "treasuryAddress": "tkalon1treasury0000000000000000000000000000000000000000000000000000000000",
+  "networkFee": {
+    "blockFeeRate": 0.05,
+    "txFeeShareTreasury": 0.20,
+    "baseTxFee": 0.01,
+    "gasPrice": 1000
+  },
+  "governance": {
+    "parameters": {
+      "networkFeeRate": 0.05,
+      "txFeeShareTreasury": 0.20,
+      "treasuryCapPercent": 10
+    }
+  },
+  "snapshot": {
+    "enabled": true,
+    "height": 33,
+    "balances": {
+      "66b22e4b76b382a436631b4e71dfad2a07b3f7c5": 165000000
+    }
+  }
+}
