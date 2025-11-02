@@ -45,11 +45,11 @@ func ParseAddress(addrStr string) (Address, error) {
 	return out, errors.New("unsupported address format")
 }
 
-// AddressFromString parses Bech32 and hex addresses  
+// AddressFromString parses Bech32 and hex addresses
 func AddressFromString(s string) Address {
 	var out Address
 	s = strings.TrimSpace(s)
-	
+
 	// Handle kalon1+hex format (kalon1 followed by 40-char hex)
 	if strings.HasPrefix(s, "kalon1") {
 		hexStr := strings.TrimPrefix(s, "kalon1")
@@ -62,12 +62,12 @@ func AddressFromString(s string) Address {
 		// If not valid hex after kalon1, return zero
 		return out
 	}
-	
+
 	// Remove "0x" prefix if present
 	if strings.HasPrefix(s, "0x") || strings.HasPrefix(s, "0X") {
 		s = s[2:]
 	}
-	
+
 	// 40-char hex address
 	if len(s) == 40 {
 		if b, err := hex.DecodeString(s); err == nil && len(b) == 20 {
@@ -75,7 +75,7 @@ func AddressFromString(s string) Address {
 			return out
 		}
 	}
-	
+
 	// Fallback: return zero address
 	return out
 }
@@ -84,7 +84,6 @@ func AddressFromString(s string) Address {
 func (a Address) String() string {
 	return hex.EncodeToString(a[:])
 }
-
 
 // BlockHeader represents the header of a block
 type BlockHeader struct {
@@ -187,6 +186,7 @@ type GenesisConfig struct {
 	Difficulty         DifficultyConfig `json:"difficulty"`
 	AddressFormat      AddressFormat    `json:"addressFormat"`
 	Premine            PremineConfig    `json:"premine"`
+	Snapshot           *SnapshotConfig  `json:"snapshot,omitempty"` // Optional snapshot for chain reset
 	TreasuryAddress    string           `json:"treasuryAddress"`
 	NetworkFee         NetworkFeeConfig `json:"networkFee"`
 	Governance         GovernanceConfig `json:"governance"`
@@ -224,6 +224,13 @@ type AddressFormat struct {
 // PremineConfig represents premine configuration
 type PremineConfig struct {
 	Enabled bool `json:"enabled"`
+}
+
+// SnapshotConfig represents snapshot configuration in genesis
+type SnapshotConfig struct {
+	Enabled  bool              `json:"enabled"`
+	Balances map[string]uint64 `json:"balances"` // Key: address (hex), Value: balance
+	Height   uint64            `json:"height"`   // Block height of snapshot
 }
 
 // NetworkFeeConfig represents network fee configuration
@@ -367,18 +374,18 @@ func (tx *Transaction) IsValid() bool {
 	if tx.Amount == 0 && tx.Fee == 0 {
 		return false // immature
 	}
-	
+
 	// Check if transaction has necessary fields
 	if tx.From == (Address{}) || tx.To == (Address{}) {
 		return false
 	}
-	
+
 	// Signature validation (optional for block rewards)
 	// Block rewards don't have signatures
 	if len(tx.Inputs) > 0 && len(tx.Signature) == 0 {
 		return false // Normal transactions need signatures
 	}
-	
+
 	return true
 }
 
@@ -424,4 +431,3 @@ func (g *GenesisConfig) CalculateNetworkFees(blockReward float64, txFees uint64)
 		TotalReward:    totalReward + txFees,
 	}
 }
-

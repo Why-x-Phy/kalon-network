@@ -11,17 +11,18 @@ import (
 
 // BlockchainV2 represents a professional blockchain implementation
 type BlockchainV2 struct {
-	mu           sync.RWMutex
-	blocks       []*Block
-	height       uint64
-	bestBlock    *Block
-	genesis      *GenesisConfig
-	consensus    *ConsensusV2
-	eventBus     *EventBus
-	stateManager *StateManager
-	utxoSet      *UTXOSet
-	mempool      *Mempool
-	storage      BlockPersister // Interface for persistent storage
+	mu              sync.RWMutex
+	blocks          []*Block
+	height          uint64
+	bestBlock       *Block
+	genesis         *GenesisConfig
+	consensus       *ConsensusV2
+	eventBus        *EventBus
+	stateManager    *StateManager
+	utxoSet         *UTXOSet
+	mempool         *Mempool
+	storage         BlockPersister // Interface for persistent storage
+	SnapshotManager *SnapshotManager
 }
 
 // BlockPersister defines the interface for persisting blocks
@@ -72,15 +73,16 @@ type DifficultyAdjustment struct {
 // NewBlockchainV2 creates a new professional blockchain
 func NewBlockchainV2(genesis *GenesisConfig, persister BlockPersister) *BlockchainV2 {
 	bc := &BlockchainV2{
-		blocks:       make([]*Block, 0),
-		height:       0,
-		genesis:      genesis,
-		consensus:    NewConsensusV2(),
-		eventBus:     NewEventBus(),
-		stateManager: NewStateManager(),
-		utxoSet:      NewUTXOSet(),
-		mempool:      NewMempool(),
-		storage:      persister,
+		blocks:          make([]*Block, 0),
+		height:          0,
+		genesis:         genesis,
+		consensus:       NewConsensusV2(),
+		eventBus:        NewEventBus(),
+		stateManager:    NewStateManager(),
+		utxoSet:         NewUTXOSet(),
+		mempool:         NewMempool(),
+		storage:         persister,
+		SnapshotManager: NewSnapshotManager(),
 	}
 
 	// Try to load existing chain from storage
@@ -92,6 +94,11 @@ func NewBlockchainV2(genesis *GenesisConfig, persister BlockPersister) *Blockcha
 	if bc.height == 0 {
 		genesisBlock := bc.createGenesisBlockV2()
 		bc.addBlockV2(genesisBlock)
+
+		// Restore snapshot from genesis config if available
+		if err := bc.CreateSnapshotFromGenesis(); err != nil {
+			log.Printf("⚠️ Failed to restore snapshot from genesis: %v", err)
+		}
 	}
 
 	return bc

@@ -130,7 +130,7 @@ func (s *ServerV2) Start() error {
 
 	// Give server time to bind to port (increased timeout)
 	time.Sleep(1 * time.Second)
-	
+
 	// Log success
 	log.Printf("✅ RPC Server should be listening on %s", s.addr)
 
@@ -264,6 +264,12 @@ func (s *ServerV2) handleRPCMethod(req *RPCRequest) *RPCResponse {
 		return s.handleGetBalance(req)
 	case "sendTransaction":
 		return s.handleSendTransaction(req)
+	case "createSnapshot":
+		return s.handleCreateSnapshot(req)
+	case "restoreSnapshot":
+		return s.handleRestoreSnapshot(req)
+	case "getSnapshot":
+		return s.handleGetSnapshot(req)
 	default:
 		return &RPCResponse{
 			JSONRPC: "2.0",
@@ -273,6 +279,144 @@ func (s *ServerV2) handleRPCMethod(req *RPCRequest) *RPCResponse {
 			},
 			ID: req.ID,
 		}
+	}
+}
+
+// handleCreateSnapshot handles createSnapshot requests
+func (s *ServerV2) handleCreateSnapshot(req *RPCRequest) *RPCResponse {
+	snapshot, err := s.blockchain.SnapshotManager.CreateSnapshot(s.blockchain)
+	if err != nil {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32603,
+				Message: "Internal error",
+				Data:    err.Error(),
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Save snapshot to file if filename provided
+	var filename string
+	if params, ok := req.Params.(map[string]interface{}); ok {
+		if f, ok := params["filename"].(string); ok && f != "" {
+			filename = f
+			if err := s.blockchain.SnapshotManager.SaveSnapshot(filename); err != nil {
+				log.Printf("⚠️ Failed to save snapshot to file: %v", err)
+			}
+		}
+	}
+
+	return &RPCResponse{
+		JSONRPC: "2.0",
+		Result: map[string]interface{}{
+			"height":       snapshot.Height,
+			"timestamp":    snapshot.Timestamp,
+			"blockHash":    snapshot.BlockHash,
+			"addressCount": len(snapshot.Balances),
+			"totalSupply":  snapshot.TotalSupply,
+			"filename":     filename,
+		},
+		ID: req.ID,
+	}
+}
+
+// handleRestoreSnapshot handles restoreSnapshot requests
+func (s *ServerV2) handleRestoreSnapshot(req *RPCRequest) *RPCResponse {
+	var filename string
+	if params, ok := req.Params.(map[string]interface{}); ok {
+		if f, ok := params["filename"].(string); ok && f != "" {
+			filename = f
+		} else {
+			return &RPCResponse{
+				JSONRPC: "2.0",
+				Error: &RPCError{
+					Code:    -32602,
+					Message: "Invalid params",
+					Data:    "filename parameter required",
+				},
+				ID: req.ID,
+			}
+		}
+	} else {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid params",
+				Data:    "filename parameter required",
+			},
+			ID: req.ID,
+		}
+	}
+
+	snapshot, err := s.blockchain.SnapshotManager.LoadSnapshot(filename)
+	if err != nil {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32603,
+				Message: "Internal error",
+				Data:    err.Error(),
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Restore balances from snapshot
+	if err := s.blockchain.SnapshotManager.RestoreBalancesFromSnapshot(s.blockchain); err != nil {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32603,
+				Message: "Internal error",
+				Data:    err.Error(),
+			},
+			ID: req.ID,
+		}
+	}
+
+	return &RPCResponse{
+		JSONRPC: "2.0",
+		Result: map[string]interface{}{
+			"height":       snapshot.Height,
+			"timestamp":    snapshot.Timestamp,
+			"blockHash":    snapshot.BlockHash,
+			"addressCount": len(snapshot.Balances),
+			"totalSupply":  snapshot.TotalSupply,
+			"restored":     true,
+		},
+		ID: req.ID,
+	}
+}
+
+// handleGetSnapshot handles getSnapshot requests
+func (s *ServerV2) handleGetSnapshot(req *RPCRequest) *RPCResponse {
+	snapshot := s.blockchain.SnapshotManager.GetSnapshot()
+	if snapshot == nil {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32603,
+				Message: "Internal error",
+				Data:    "No snapshot available",
+			},
+			ID: req.ID,
+		}
+	}
+
+	return &RPCResponse{
+		JSONRPC: "2.0",
+		Result: map[string]interface{}{
+			"height":       snapshot.Height,
+			"timestamp":    snapshot.Timestamp,
+			"blockHash":    snapshot.BlockHash,
+			"addressCount": len(snapshot.Balances),
+			"totalSupply":  snapshot.TotalSupply,
+			"chainId":      snapshot.ChainID,
+		},
+		ID: req.ID,
 	}
 }
 
