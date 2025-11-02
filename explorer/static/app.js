@@ -44,6 +44,38 @@ async function checkConnectionStatus() {
         }
     } catch (error) {
         console.error('Connection check failed:', error);
+        
+        // Try HTTP fallback if HTTPS failed
+        if (RPC_URL.startsWith('https://') && window.RPC_URL_HTTP) {
+            console.log('HTTPS failed, trying HTTP fallback...');
+            const httpUrl = window.RPC_URL_HTTP;
+            const httpEndpoint = `${httpUrl}/rpc`;
+            
+            try {
+                const fallbackResponse = await fetch(httpEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        jsonrpc: '2.0',
+                        method: 'getHeight',
+                        id: 1
+                    })
+                });
+                
+                const fallbackData = await fallbackResponse.json();
+                if (fallbackData.result !== undefined) {
+                    // Switch to HTTP permanently
+                    window.RPC_URL = httpUrl;
+                    window.location.reload(); // Reload to use HTTP
+                    return;
+                }
+            } catch (fallbackError) {
+                console.error('HTTP fallback also failed:', fallbackError);
+            }
+        }
+        
         updateOnlineStatus(false);
     }
 }
@@ -81,6 +113,38 @@ async function callRPC(method, params = {}) {
         return data.result;
     } catch (error) {
         console.error(`RPC call failed (${method}):`, error);
+        
+        // Try HTTP fallback if HTTPS failed
+        if (RPC_URL.startsWith('https://') && window.RPC_URL_HTTP) {
+            console.log(`HTTPS failed for ${method}, trying HTTP fallback...`);
+            const httpUrl = window.RPC_URL_HTTP;
+            const httpEndpoint = `${httpUrl}/rpc`;
+            
+            try {
+                const fallbackResponse = await fetch(httpEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        jsonrpc: '2.0',
+                        method: method,
+                        params: params,
+                        id: 1
+                    })
+                });
+                
+                const fallbackData = await fallbackResponse.json();
+                if (fallbackData.error) {
+                    throw new Error(fallbackData.error.message || 'RPC Error');
+                }
+                return fallbackData.result;
+            } catch (fallbackError) {
+                console.error(`HTTP fallback also failed for ${method}:`, fallbackError);
+                throw fallbackError;
+            }
+        }
+        
         throw error;
     }
 }
