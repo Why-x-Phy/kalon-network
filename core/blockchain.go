@@ -96,8 +96,11 @@ func NewBlockchainV2(genesis *GenesisConfig, persister BlockPersister) *Blockcha
 		bc.addBlockV2(genesisBlock)
 
 		// Restore snapshot from genesis config if available
+		log.Printf("🔍 DEBUG: Checking for snapshot in genesis config...")
 		if err := bc.CreateSnapshotFromGenesis(); err != nil {
 			log.Printf("⚠️ Failed to restore snapshot from genesis: %v", err)
+		} else {
+			log.Printf("✅ Snapshot check completed")
 		}
 	}
 
@@ -579,6 +582,11 @@ func (bc *BlockchainV2) loadChainFromStorage() {
 
 	// Load all blocks from genesis to best block
 	for i := uint64(0); i <= bc.height; i++ {
+		// Progress logging every 10 blocks
+		if i%10 == 0 || i == bc.height {
+			log.Printf("🔄 Loading block %d/%d from storage...", i, bc.height)
+		}
+
 		block, err := bc.storage.GetBlockByNumber(i)
 		if err != nil || block == nil {
 			log.Printf("⚠️ Failed to load block %d: %v", i, err)
