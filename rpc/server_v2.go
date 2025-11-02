@@ -41,9 +41,9 @@ type RPCError struct {
 // ServerV2 represents a professional RPC server
 type ServerV2 struct {
 	addr        string
-	httpsAddr   string                 // HTTPS server address (e.g. ":16317")
-	certFile    string                 // SSL certificate file path
-	keyFile     string                 // SSL private key file path
+	httpsAddr   string // HTTPS server address (e.g. ":16317")
+	certFile    string // SSL certificate file path
+	keyFile     string // SSL private key file path
 	blockchain  *core.BlockchainV2
 	mu          sync.RWMutex
 	connections map[string]*Connection
@@ -171,7 +171,7 @@ func (s *ServerV2) Start() error {
 			log.Printf("🔒 HTTPS RPC Server starting on %s", s.httpsAddr)
 			log.Printf("   Certificate: %s", s.certFile)
 			log.Printf("   Key: %s", s.keyFile)
-			
+
 			// ListenAndServeTLS will validate certificate files on start
 			// If files are missing or invalid, it will return an error
 			// We catch and log it, but don't crash the Node
