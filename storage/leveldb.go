@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/kalon-network/kalon/core"
@@ -34,14 +35,13 @@ func NewLevelDBStorage(path string) (*LevelDBStorage, error) {
 		log.Printf("⚠️ Failed to open LevelDB: %v", err)
 		log.Printf("🔧 Attempting to recover database...")
 		
-		// Try to recover the database
-		_, recoverErr := leveldb.RecoverFile(path, nil)
-		if recoverErr != nil {
-			log.Printf("⚠️ Failed to recover database: %v", recoverErr)
-			log.Printf("💡 Deleting corrupted database and starting fresh...")
-			// Delete corrupted database directory
+		// Check if error is "resource temporarily unavailable" (database locked)
+		if strings.Contains(err.Error(), "resource temporarily unavailable") || strings.Contains(err.Error(), "resource busy") {
+			log.Printf("⚠️ LevelDB is locked by another process")
+			log.Printf("💡 Deleting locked database and starting fresh...")
+			// Delete locked database directory
 			if rmErr := os.RemoveAll(path); rmErr != nil {
-				return nil, fmt.Errorf("failed to remove corrupted database: %v (original error: %v)", rmErr, err)
+				return nil, fmt.Errorf("failed to remove locked database: %v (original error: %v)", rmErr, err)
 			}
 			// Recreate directory
 			if err := ensureDir(path); err != nil {
@@ -50,16 +50,37 @@ func NewLevelDBStorage(path string) (*LevelDBStorage, error) {
 			// Try to open again
 			db, err = leveldb.OpenFile(path, &opt.Options{})
 			if err != nil {
-				return nil, fmt.Errorf("failed to open database after recovery: %v", err)
+				return nil, fmt.Errorf("failed to open database after removing lock: %v", err)
 			}
 			log.Printf("✅ Created fresh database at %s", path)
 		} else {
-			// Recovery succeeded, try to open again
-			db, err = leveldb.OpenFile(path, &opt.Options{})
-			if err != nil {
-				return nil, fmt.Errorf("failed to open database after recovery: %v", err)
+			// Try to recover the database
+			_, recoverErr := leveldb.RecoverFile(path, nil)
+			if recoverErr != nil {
+				log.Printf("⚠️ Failed to recover database: %v", recoverErr)
+				log.Printf("💡 Deleting corrupted database and starting fresh...")
+				// Delete corrupted database directory
+				if rmErr := os.RemoveAll(path); rmErr != nil {
+					return nil, fmt.Errorf("failed to remove corrupted database: %v (original error: %v)", rmErr, err)
+				}
+				// Recreate directory
+				if err := ensureDir(path); err != nil {
+					return nil, fmt.Errorf("failed to recreate directory: %v", err)
+				}
+				// Try to open again
+				db, err = leveldb.OpenFile(path, &opt.Options{})
+				if err != nil {
+					return nil, fmt.Errorf("failed to open database after recovery: %v", err)
+				}
+				log.Printf("✅ Created fresh database at %s", path)
+			} else {
+				// Recovery succeeded, try to open again
+				db, err = leveldb.OpenFile(path, &opt.Options{})
+				if err != nil {
+					return nil, fmt.Errorf("failed to open database after recovery: %v", err)
+				}
+				log.Printf("✅ Recovered database at %s", path)
 			}
-			log.Printf("✅ Recovered database at %s", path)
 		}
 	}
 
