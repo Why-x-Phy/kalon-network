@@ -35,7 +35,8 @@ func NewLevelDBStorage(path string) (*LevelDBStorage, error) {
 		log.Printf("🔧 Attempting to recover database...")
 		
 		// Try to recover the database
-		if recoverErr := leveldb.RecoverFile(path, nil); recoverErr != nil {
+		_, recoverErr := leveldb.RecoverFile(path, nil)
+		if recoverErr != nil {
 			log.Printf("⚠️ Failed to recover database: %v", recoverErr)
 			log.Printf("💡 Deleting corrupted database and starting fresh...")
 			// Delete corrupted database directory
