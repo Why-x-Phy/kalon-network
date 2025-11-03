@@ -27,10 +27,39 @@ func NewLevelDBStorage(path string) (*LevelDBStorage, error) {
 		return nil, fmt.Errorf("failed to create directory: %v", err)
 	}
 
-	// Open database
+	// Try to open database
 	db, err := leveldb.OpenFile(path, &opt.Options{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %v", err)
+		// If database is corrupted, try to recover it
+		log.Printf("⚠️ Failed to open LevelDB: %v", err)
+		log.Printf("🔧 Attempting to recover database...")
+		
+		// Try to recover the database
+		if recoverErr := leveldb.RecoverFile(path, nil); recoverErr != nil {
+			log.Printf("⚠️ Failed to recover database: %v", recoverErr)
+			log.Printf("💡 Deleting corrupted database and starting fresh...")
+			// Delete corrupted database directory
+			if rmErr := os.RemoveAll(path); rmErr != nil {
+				return nil, fmt.Errorf("failed to remove corrupted database: %v (original error: %v)", rmErr, err)
+			}
+			// Recreate directory
+			if err := ensureDir(path); err != nil {
+				return nil, fmt.Errorf("failed to recreate directory: %v", err)
+			}
+			// Try to open again
+			db, err = leveldb.OpenFile(path, &opt.Options{})
+			if err != nil {
+				return nil, fmt.Errorf("failed to open database after recovery: %v", err)
+			}
+			log.Printf("✅ Created fresh database at %s", path)
+		} else {
+			// Recovery succeeded, try to open again
+			db, err = leveldb.OpenFile(path, &opt.Options{})
+			if err != nil {
+				return nil, fmt.Errorf("failed to open database after recovery: %v", err)
+			}
+			log.Printf("✅ Recovered database at %s", path)
+		}
 	}
 
 	return &LevelDBStorage{
