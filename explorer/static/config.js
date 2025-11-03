@@ -1,13 +1,15 @@
 // Explorer Configuration
 // Set RPC_URL before loading other scripts if you need a different server
-// Example: window.RPC_URL = 'http://your-node-server:16316';
+// Example: window.RPC_URL = 'https://explorer.kalon-network.com/rpc';
 
-// Default RPC URL (configured for test server - HTTP for reliability)
-// Note: HTTP works without browser warnings and certificate issues
-// If your website runs on HTTPS and browser blocks HTTP, use HTTPS with certificate warning acceptance
+// Default RPC URL (configured for Explorer on same server as Node)
+// Explorer runs on same server as Node, nginx makes proxy to Node RPC
+// RPC calls go through same domain (no cross-origin issues)
 if (typeof window.RPC_URL === 'undefined') {
-    // Use HTTP by default (works without browser warnings)
-    window.RPC_URL = 'http://185.133.249.107:16316';
-    window.RPC_URL_HTTPS = 'https://185.133.249.107:16317'; // Optional HTTPS fallback
+    // Use same domain as Explorer (nginx makes proxy to Node)
+    // This works when Explorer and Node are on the same server
+    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+    const host = window.location.host;
+    window.RPC_URL = `${protocol}//${host}`;
 }
 

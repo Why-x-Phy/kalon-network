@@ -119,7 +119,17 @@ sudo nginx -t  # Konfiguration testen
 sudo systemctl reload nginx
 ```
 
-## Schritt 5: Certbot auf Testserver installieren
+## Schritt 5: Setup-Script ausführen (oder manuell)
+
+**Option A: Automatisches Setup-Script:**
+```bash
+cd ~/kalon-network
+./setup-explorer-nginx.sh
+```
+
+**Option B: Manuell (siehe ursprüngliche Anleitung weiter unten)**
+
+## Schritt 6: Certbot auf Testserver installieren
 
 ```bash
 # Certbot installieren:
@@ -137,23 +147,20 @@ sudo certbot renew --dry-run
 - nginx muss laufen
 - Certbot konfiguriert nginx automatisch für HTTPS
 
-## Schritt 6: Explorer config.js anpassen
+## Schritt 6: Explorer config.js (bereits angepasst)
 
-Ändere `/var/www/explorer/config.js`:
+Die `config.js` wurde bereits angepasst und verwendet automatisch die gleiche Domain wie der Explorer. Keine weitere Änderung nötig!
 
+Die config.js verwendet jetzt:
 ```javascript
-// Explorer Configuration
-if (typeof window.RPC_URL === 'undefined') {
-    // RPC über gleiche Domain (nginx macht Proxy)
-    window.RPC_URL = 'https://explorer.kalon-network.com';
-}
+const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+const host = window.location.host;
+window.RPC_URL = `${protocol}//${host}`;
 ```
 
-**Oder direkt in nginx, damit config.js nicht geändert werden muss:**
+Das bedeutet: Explorer ruft automatisch `/rpc` auf der gleichen Domain auf, nginx macht Proxy zu Node.
 
-nginx kann die config.js beim Laden modifizieren oder wir ändern einfach die Datei.
-
-## Schritt 7: Node starten (ohne HTTPS, da nginx macht Proxy)
+## Schritt 7: Node starten (nur HTTP auf localhost, da nginx macht Proxy)
 
 ```bash
 # Node starten (nur HTTP, nginx macht HTTPS):
