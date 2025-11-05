@@ -83,11 +83,13 @@ echo ""
 
 # 8. Firewall Ports öffnen
 echo "8. Öffne Firewall Ports..."
+# WICHTIG: SSH zuerst erlauben, damit Verbindung nicht verloren geht!
+sudo ufw allow 22/tcp
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 sudo ufw allow 17335/tcp
 sudo ufw --force enable
-echo -e "${GREEN}✅ Firewall Ports geöffnet${NC}"
+echo -e "${GREEN}✅ Firewall Ports geöffnet (inkl. SSH Port 22)${NC}"
 echo ""
 
 # 9. Erstelle einfache nginx-Konfiguration
