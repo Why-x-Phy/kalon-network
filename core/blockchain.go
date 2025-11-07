@@ -461,9 +461,27 @@ func (bc *BlockchainV2) CreateNewBlockV2(miner Address, txs []Transaction) *Bloc
 	consensusManager := NewConsensusManager(bc.genesis)
 	difficulty := consensusManager.CalculateDifficulty(parent.Header.Number+1, parent)
 
-	// Create block reward transaction
-	blockReward := bc.calculateBlockReward(parent.Header.Number + 1)
-	rewardTx := bc.createBlockRewardTransaction(miner, blockReward)
+	// Calculate block reward distribution (Miner + Treasury)
+	baseReward := bc.genesis.GetCurrentReward(parent.Header.Number + 1)
+
+	// Calculate transaction fees from pending transactions
+	txFees := uint64(0)
+	for _, tx := range txs {
+		txFees += tx.Fee
+	}
+
+	// Calculate network fees (Miner + Treasury distribution)
+	blockRewardDist := bc.genesis.CalculateNetworkFees(baseReward, txFees)
+
+	// Create block reward transaction for miner
+	minerRewardTx := bc.createBlockRewardTransaction(miner, blockRewardDist.MinerReward)
+
+	// Create treasury reward transaction (if treasury address is configured and reward > 0)
+	var treasuryRewardTx *Transaction
+	if blockRewardDist.TreasuryReward > 0 && bc.genesis.TreasuryAddress != "" {
+		treasuryAddr := AddressFromString(bc.genesis.TreasuryAddress)
+		treasuryRewardTx = bc.createBlockRewardTransactionPtr(treasuryAddr, blockRewardDist.TreasuryReward)
+	}
 
 	// Get pending transactions from mempool
 	pendingTxs := bc.mempool.GetPendingTransactions()
@@ -471,8 +489,12 @@ func (bc *BlockchainV2) CreateNewBlockV2(miner Address, txs []Transaction) *Bloc
 		txs = append(txs, *tx)
 	}
 
-	// Add reward transaction to the beginning of transactions
-	allTxs := append([]Transaction{rewardTx}, txs...)
+	// Add reward transactions to the beginning of transactions
+	allTxs := []Transaction{minerRewardTx}
+	if treasuryRewardTx != nil {
+		allTxs = append(allTxs, *treasuryRewardTx)
+	}
+	allTxs = append(allTxs, txs...)
 
 	// Create block template
 	block := &Block{
@@ -485,8 +507,8 @@ func (bc *BlockchainV2) CreateNewBlockV2(miner Address, txs []Transaction) *Bloc
 			Nonce:       0,
 			MerkleRoot:  Hash{}, // TODO: Calculate merkle root
 			TxCount:     uint32(len(allTxs)),
-			NetworkFee:  0,
-			TreasuryFee: 0,
+			NetworkFee:  txFees,
+			TreasuryFee: blockRewardDist.TreasuryReward,
 		},
 		Txs:  allTxs,
 		Hash: Hash{},
@@ -511,6 +533,12 @@ func (bc *BlockchainV2) calculateBlockReward(blockNumber uint64) uint64 {
 	}
 
 	return reward
+}
+
+// createBlockRewardTransactionPtr creates a block reward transaction and returns a pointer
+func (bc *BlockchainV2) createBlockRewardTransactionPtr(recipient Address, amount uint64) *Transaction {
+	tx := bc.createBlockRewardTransaction(recipient, amount)
+	return &tx
 }
 
 // createBlockRewardTransaction creates a block reward transaction

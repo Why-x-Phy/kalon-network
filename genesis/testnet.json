@@ -20,7 +20,7 @@
   },
   "addressFormat": { "type": "bech32", "hrp": "tkalon" },
   "premine": { "enabled": false },
-  "treasuryAddress": "tkalon1treasury0000000000000000000000000000000000000000000000000000000000",
+  "treasuryAddress": "kalon1df7552b7f9f25986fd33511e68d5ba5e37fd12d3",
   "networkFee": {
     "blockFeeRate": 0.05,
     "txFeeShareTreasury": 0.20,
