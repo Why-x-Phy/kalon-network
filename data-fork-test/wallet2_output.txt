@@ -1,0 +1,8 @@
+Enter passphrase (optional): Wallet created successfully!
+Address: kalon1fd96a4574c793e15736d01e75217cd935eaebca6
+Public Key: 979b9cf24278a418e05e7fe1abf3c48a6b8fb1cf403d4b04253dcfff7e7018bc
+Mnemonic: timber power problem process element crumble ahead mutual control begin absurd cover buddy garment super room relief apple embrace service escape analyst typical frequent
+Wallet saved to: wallet-wallet2.json
+
+⚠️  IMPORTANT: Save your mnemonic phrase in a safe place!
+   You will need it to recover your wallet if you lose access.

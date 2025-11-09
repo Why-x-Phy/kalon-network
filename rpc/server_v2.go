@@ -529,6 +529,7 @@ func (s *ServerV2) handleGetBestBlock(req *RPCRequest) *RPCResponse {
 			"number":     block.Header.Number,
 			"merkleRoot": hex.EncodeToString(block.Header.MerkleRoot[:]), // Include merkle root
 			"txCount":    block.Header.TxCount,                           // Include tx count
+			"difficulty": block.Header.Difficulty,                        // Include difficulty
 		},
 		ID: req.ID,
 	}

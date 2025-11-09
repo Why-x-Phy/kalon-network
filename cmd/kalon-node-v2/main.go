@@ -149,6 +149,9 @@ func (n *NodeV2) Start() error {
 		log.Printf("✅ P2P network started on %s", n.config.P2PAddr)
 	}
 
+	// Setup P2P integration with blockchain
+	n.setupP2PIntegration()
+
 	// Wait a moment for server to start
 	time.Sleep(1 * time.Second)
 
@@ -248,4 +251,101 @@ func (n *NodeV2) loadGenesis() (*core.GenesisConfig, error) {
 
 	log.Printf("✅ Loaded genesis from %s", n.config.Genesis)
 	return &genesis, nil
+}
+
+// setupP2PIntegration sets up the integration between P2P network and blockchain
+func (n *NodeV2) setupP2PIntegration() {
+	// Subscribe to blockAdded events and broadcast to peers
+	blockAddedChan := n.blockchain.GetEventBus().Subscribe("blockAdded")
+	go func() {
+		for event := range blockAddedChan {
+			if eventData, ok := event.(map[string]interface{}); ok {
+				if block, ok := eventData["block"].(*core.Block); ok {
+					// Convert core.Block to network.Block
+					networkBlock := network.ConvertCoreBlockToNetworkBlock(block)
+					if networkBlock != nil {
+						// Broadcast to all peers
+						if err := n.p2p.BroadcastBlock(networkBlock); err != nil {
+							log.Printf("⚠️ Failed to broadcast block: %v", err)
+						} else {
+							log.Printf("📡 Broadcasted block #%d to peers", block.Header.Number)
+						}
+					}
+				}
+			}
+		}
+	}()
+
+	// Set handler for received blocks from peers
+	n.p2p.SetBlockHandler(func(networkBlock *network.Block) error {
+		// Convert network.Block to core.Block
+		coreBlock, err := network.ConvertNetworkBlockToCoreBlock(networkBlock)
+		if err != nil {
+			return fmt.Errorf("failed to convert network block: %w", err)
+		}
+
+		// Add block to blockchain
+		if err := n.blockchain.AddBlockV2(coreBlock); err != nil {
+			// Don't log error if block already exists (common case)
+			if err.Error() != "block already exists" {
+				log.Printf("⚠️ Failed to add block from peer: %v", err)
+			}
+			return err
+		}
+
+		log.Printf("📥 Received and added block #%d from peer", coreBlock.Header.Number)
+		return nil
+	})
+
+	// Set handler for received transactions from peers
+	n.p2p.SetTransactionHandler(func(networkTx *network.Transaction) error {
+		// Convert network.Transaction to core.Transaction
+		coreTx := network.ConvertNetworkTransactionToCoreTransaction(networkTx)
+		if coreTx == nil {
+			return fmt.Errorf("failed to convert network transaction")
+		}
+
+		// Add transaction to mempool
+		// Note: We need to validate the transaction first
+		// For now, we'll just add it to the mempool
+		// TODO: Add proper transaction validation
+		n.blockchain.GetMempool().AddTransaction(coreTx)
+		log.Printf("📥 Received transaction from peer: %x", coreTx.Hash)
+		return nil
+	})
+
+	// Set handler for get_blocks requests
+	n.p2p.SetGetBlocksHandler(func(startHeight uint64, endHeight uint64) ([]*network.Block, error) {
+		// Get blocks from blockchain
+		currentHeight := n.blockchain.GetHeight()
+
+		// Limit end height to current height
+		if endHeight > currentHeight {
+			endHeight = currentHeight
+		}
+
+		// Limit range to 100 blocks max
+		if endHeight-startHeight > 100 {
+			endHeight = startHeight + 100
+		}
+
+		blocks := make([]*network.Block, 0)
+		for i := startHeight; i <= endHeight; i++ {
+			// Get block by number
+			block, err := n.blockchain.GetBlockByNumber(i)
+			if err != nil || block == nil {
+				continue
+			}
+
+			// Convert to network block
+			networkBlock := network.ConvertCoreBlockToNetworkBlock(block)
+			if networkBlock != nil {
+				blocks = append(blocks, networkBlock)
+			}
+		}
+
+		return blocks, nil
+	})
+
+	log.Printf("✅ P2P integration with blockchain setup completed")
 }

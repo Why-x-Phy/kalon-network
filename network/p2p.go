@@ -34,6 +34,10 @@ type P2P struct {
 	blockChan chan *Block
 	txChan    chan *Transaction
 	mu        sync.RWMutex
+	// Callback functions for blockchain integration
+	onBlockReceived       func(*Block) error
+	onTransactionReceived func(*Transaction) error
+	onGetBlocksRequest    func(startHeight uint64, endHeight uint64) ([]*Block, error)
 }
 
 // Peer represents a connected peer
@@ -103,6 +107,27 @@ func NewP2P(config *P2PConfig) *P2P {
 		blockChan: make(chan *Block, 100),
 		txChan:    make(chan *Transaction, 1000),
 	}
+}
+
+// SetBlockHandler sets the callback function for received blocks
+func (p *P2P) SetBlockHandler(handler func(*Block) error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.onBlockReceived = handler
+}
+
+// SetTransactionHandler sets the callback function for received transactions
+func (p *P2P) SetTransactionHandler(handler func(*Transaction) error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.onTransactionReceived = handler
+}
+
+// SetGetBlocksHandler sets the callback function for get_blocks requests
+func (p *P2P) SetGetBlocksHandler(handler func(startHeight uint64, endHeight uint64) ([]*Block, error)) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.onGetBlocksRequest = handler
 }
 
 // Start starts the P2P network
@@ -368,6 +393,17 @@ func (p *P2P) handleBlockMessage(peer *Peer, message *Message) {
 		return
 	}
 
+	// Call handler if set
+	p.mu.RLock()
+	handler := p.onBlockReceived
+	p.mu.RUnlock()
+
+	if handler != nil {
+		if err := handler(&block); err != nil {
+			log.Printf("Block handler error: %v", err)
+		}
+	}
+
 	// Forward to block channel
 	select {
 	case p.blockChan <- &block:
@@ -391,6 +427,17 @@ func (p *P2P) handleTransactionMessage(peer *Peer, message *Message) {
 		return
 	}
 
+	// Call handler if set
+	p.mu.RLock()
+	handler := p.onTransactionReceived
+	p.mu.RUnlock()
+
+	if handler != nil {
+		if err := handler(&tx); err != nil {
+			log.Printf("Transaction handler error: %v", err)
+		}
+	}
+
 	// Forward to transaction channel
 	select {
 	case p.txChan <- &tx:
@@ -401,14 +448,80 @@ func (p *P2P) handleTransactionMessage(peer *Peer, message *Message) {
 
 // handleGetBlocksMessage handles a get blocks message
 func (p *P2P) handleGetBlocksMessage(peer *Peer, message *Message) {
-	// This would be implemented to send blocks to the peer
-	log.Printf("Received get_blocks request from peer %s", peer.ID)
+	// Parse request data
+	var startHeight, endHeight uint64
+	if data, ok := message.Data.(map[string]interface{}); ok {
+		if start, ok := data["startHeight"].(float64); ok {
+			startHeight = uint64(start)
+		}
+		if end, ok := data["endHeight"].(float64); ok {
+			endHeight = uint64(end)
+		}
+	}
+
+	log.Printf("Received get_blocks request from peer %s: %d-%d", peer.ID, startHeight, endHeight)
+
+	// Call handler if set
+	p.mu.RLock()
+	handler := p.onGetBlocksRequest
+	p.mu.RUnlock()
+
+	if handler == nil {
+		log.Printf("No get_blocks handler set")
+		return
+	}
+
+	// Get blocks from blockchain
+	blocks, err := handler(startHeight, endHeight)
+	if err != nil {
+		log.Printf("Failed to get blocks: %v", err)
+		return
+	}
+
+	// Send blocks response
+	response := &Message{
+		Type:    "blocks",
+		Data:    blocks,
+		Version: "1.0",
+		Time:    time.Now(),
+	}
+
+	if err := p.sendMessage(peer, response); err != nil {
+		log.Printf("Failed to send blocks to peer %s: %v", peer.ID, err)
+	} else {
+		log.Printf("Sent %d blocks to peer %s", len(blocks), peer.ID)
+	}
 }
 
 // handleBlocksMessage handles a blocks message
 func (p *P2P) handleBlocksMessage(peer *Peer, message *Message) {
-	// This would be implemented to handle received blocks
-	log.Printf("Received blocks from peer %s", peer.ID)
+	// Parse blocks data
+	blocksData, err := json.Marshal(message.Data)
+	if err != nil {
+		log.Printf("Failed to marshal blocks data: %v", err)
+		return
+	}
+
+	var blocks []Block
+	if err := json.Unmarshal(blocksData, &blocks); err != nil {
+		log.Printf("Failed to unmarshal blocks: %v", err)
+		return
+	}
+
+	log.Printf("Received %d blocks from peer %s", len(blocks), peer.ID)
+
+	// Process each block
+	p.mu.RLock()
+	handler := p.onBlockReceived
+	p.mu.RUnlock()
+
+	if handler != nil {
+		for i := range blocks {
+			if err := handler(&blocks[i]); err != nil {
+				log.Printf("Failed to process block %d from peer: %v", i, err)
+			}
+		}
+	}
 }
 
 // handlePingMessage handles a ping message

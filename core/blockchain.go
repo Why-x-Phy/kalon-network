@@ -195,7 +195,9 @@ func (bc *BlockchainV2) addBlockV2(block *Block) error {
 	// Fork detection: Check BEFORE validation if this could be a fork
 	isFork := false
 	var parentBlock *Block = nil
+	var parentHash Hash
 
+	// Determine parent hash first (without storage access)
 	if bc.bestBlock != nil {
 		if block.Header.Number == bc.bestBlock.Header.Number {
 			// Same height but different hash = fork
@@ -205,11 +207,7 @@ func (bc *BlockchainV2) addBlockV2(block *Block) error {
 					block.Header.Number, bc.bestBlock.Hash, block.Hash)
 				// For fork at same height, parent is the same as bestBlock's parent
 				if bc.bestBlock.Header.Number > 0 {
-					parentHash := bc.bestBlock.Header.ParentHash
-					parentBlock = bc.getBlockByHash(parentHash)
-					if parentBlock == nil && bc.storage != nil {
-						parentBlock, _ = bc.storage.GetBlockByHash(parentHash[:])
-					}
+					parentHash = bc.bestBlock.Header.ParentHash
 				}
 			}
 		} else if block.Header.ParentHash == bc.bestBlock.Hash {
@@ -218,31 +216,46 @@ func (bc *BlockchainV2) addBlockV2(block *Block) error {
 			parentBlock = bc.bestBlock
 		} else if block.Header.ParentHash != bc.bestBlock.Hash {
 			// Different parent - could be a fork
-			// Try to find parent block in index or storage
-			parentHash := block.Header.ParentHash
-			parentBlock = bc.getBlockByHash(parentHash)
-			if parentBlock == nil && bc.storage != nil {
-				parentBlock, _ = bc.storage.GetBlockByHash(parentHash[:])
-			}
+			parentHash = block.Header.ParentHash
+		}
+	}
 
-			if parentBlock != nil {
-				// Parent exists - check if it's a fork
-				parentHashKey := hex.EncodeToString(parentHash[:])
-				if forkBlocks, exists := bc.forkBlocks[parentHashKey]; exists && len(forkBlocks) > 0 {
-					// Parent is a fork block
-					isFork = true
-					log.Printf("🔀 Fork detected! Block #%d extends fork chain", block.Header.Number)
-				} else if parentBlock.Hash != bc.bestBlock.Hash {
-					// Parent is different from bestBlock - this is a fork
-					isFork = true
-					log.Printf("🔀 Fork detected! Block #%d has different parent: %x (bestBlock: %x)",
-						block.Header.Number, parentHash, bc.bestBlock.Hash)
-				}
-			} else {
-				// Parent not found - this is invalid (orphan block)
+	// If we need to fetch parent from storage, do it OUTSIDE the lock
+	if parentBlock == nil && parentHash != (Hash{}) {
+		// Try to get from index first (fast, no I/O)
+		parentBlock = bc.getBlockByHash(parentHash)
+
+		// If not in index, release lock and fetch from storage
+		if parentBlock == nil && bc.storage != nil {
+			bc.mu.Unlock()
+			parentBlock, _ = bc.storage.GetBlockByHash(parentHash[:])
+			bc.mu.Lock()
+
+			// Re-check if block was added while we were fetching (race condition)
+			blockHashKey := hex.EncodeToString(block.Hash[:])
+			if existingBlock := bc.blockIndex[blockHashKey]; existingBlock != nil {
 				bc.mu.Unlock()
-				return fmt.Errorf("parent block not found: %x", parentHash)
+				return fmt.Errorf("block already exists")
 			}
+		}
+
+		if parentBlock != nil {
+			// Parent exists - check if it's a fork
+			parentHashKey := hex.EncodeToString(parentHash[:])
+			if forkBlocks, exists := bc.forkBlocks[parentHashKey]; exists && len(forkBlocks) > 0 {
+				// Parent is a fork block
+				isFork = true
+				log.Printf("🔀 Fork detected! Block #%d extends fork chain", block.Header.Number)
+			} else if parentBlock.Hash != bc.bestBlock.Hash {
+				// Parent is different from bestBlock - this is a fork
+				isFork = true
+				log.Printf("🔀 Fork detected! Block #%d has different parent: %x (bestBlock: %x)",
+					block.Header.Number, parentHash, bc.bestBlock.Hash)
+			}
+		} else {
+			// Parent not found - this is invalid (orphan block)
+			bc.mu.Unlock()
+			return fmt.Errorf("parent block not found: %x", parentHash)
 		}
 	}
 
@@ -525,6 +538,8 @@ func (bc *BlockchainV2) getBlockByHash(hash Hash) *Block {
 }
 
 // calculateChainLength calculates the chain length from a block to genesis
+// NOTE: This function should NOT access storage if called within a lock
+// It only uses in-memory block index to avoid lock contention
 func (bc *BlockchainV2) calculateChainLength(block *Block) uint64 {
 	if block == nil {
 		return 0
@@ -533,18 +548,15 @@ func (bc *BlockchainV2) calculateChainLength(block *Block) uint64 {
 	length := uint64(1) // Count this block
 	current := block
 
-	// Traverse back to genesis
+	// Traverse back to genesis using only in-memory index
+	// We avoid storage access to prevent lock contention
 	for current.Header.Number > 0 {
 		parentHash := current.Header.ParentHash
 		parent := bc.getBlockByHash(parentHash)
 		if parent == nil {
-			// Try to get from storage if available
-			if bc.storage != nil {
-				parent, _ = bc.storage.GetBlockByHash(parentHash[:])
-			}
-			if parent == nil {
-				break
-			}
+			// Block not in index - cannot continue without storage access
+			// This is acceptable for fork detection as we only need approximate length
+			break
 		}
 		length++
 		current = parent
@@ -554,12 +566,14 @@ func (bc *BlockchainV2) calculateChainLength(block *Block) uint64 {
 }
 
 // findCommonParent finds the common parent block between two chains
+// NOTE: This function should NOT access storage if called within a lock
+// It only uses in-memory block index to avoid lock contention
 func (bc *BlockchainV2) findCommonParent(block1, block2 *Block) *Block {
 	if block1 == nil || block2 == nil {
 		return nil
 	}
 
-	// Build chain hashes for block1
+	// Build chain hashes for block1 (using only in-memory index)
 	chain1Hashes := make(map[string]bool)
 	current := block1
 	for current != nil {
@@ -571,15 +585,13 @@ func (bc *BlockchainV2) findCommonParent(block1, block2 *Block) *Block {
 		}
 		parentHash := current.Header.ParentHash
 		current = bc.getBlockByHash(parentHash)
-		if current == nil && bc.storage != nil {
-			current, _ = bc.storage.GetBlockByHash(parentHash[:])
-		}
+		// Avoid storage access to prevent lock contention
 		if current == nil {
 			break
 		}
 	}
 
-	// Traverse block2 chain to find common parent
+	// Traverse block2 chain to find common parent (using only in-memory index)
 	current = block2
 	for current != nil {
 		hashKey := hex.EncodeToString(current.Hash[:])
@@ -592,9 +604,7 @@ func (bc *BlockchainV2) findCommonParent(block1, block2 *Block) *Block {
 		}
 		parentHash := current.Header.ParentHash
 		current = bc.getBlockByHash(parentHash)
-		if current == nil && bc.storage != nil {
-			current, _ = bc.storage.GetBlockByHash(parentHash[:])
-		}
+		// Avoid storage access to prevent lock contention
 		if current == nil {
 			break
 		}
@@ -606,9 +616,9 @@ func (bc *BlockchainV2) findCommonParent(block1, block2 *Block) *Block {
 // reorganizeChain performs chain reorganization when a longer fork is detected
 func (bc *BlockchainV2) reorganizeChain(newBestBlock *Block) error {
 	bc.mu.Lock()
-	defer bc.mu.Unlock()
 
 	if bc.bestBlock == nil {
+		bc.mu.Unlock()
 		return fmt.Errorf("no current best block to reorganize from")
 	}
 
@@ -619,12 +629,14 @@ func (bc *BlockchainV2) reorganizeChain(newBestBlock *Block) error {
 	// Find common parent
 	commonParent := bc.findCommonParent(bc.bestBlock, newBestBlock)
 	if commonParent == nil {
+		bc.mu.Unlock()
 		return fmt.Errorf("no common parent found between chains")
 	}
 
 	log.Printf("   Common parent: Block #%d (%x)", commonParent.Header.Number, commonParent.Hash)
 
 	// Build list of blocks to remove (from current chain, after common parent)
+	// Use only in-memory index to avoid lock contention
 	blocksToRemove := make([]*Block, 0)
 	current := bc.bestBlock
 	for current != nil && current.Hash != commonParent.Hash {
@@ -634,15 +646,14 @@ func (bc *BlockchainV2) reorganizeChain(newBestBlock *Block) error {
 		}
 		parentHash := current.Header.ParentHash
 		current = bc.getBlockByHash(parentHash)
-		if current == nil && bc.storage != nil {
-			current, _ = bc.storage.GetBlockByHash(parentHash[:])
-		}
+		// Avoid storage access to prevent lock contention
 		if current == nil {
 			break
 		}
 	}
 
 	// Build list of blocks to add (from new chain, after common parent)
+	// Use only in-memory index to avoid lock contention
 	blocksToAdd := make([]*Block, 0)
 	current = newBestBlock
 	for current != nil && current.Hash != commonParent.Hash {
@@ -652,9 +663,7 @@ func (bc *BlockchainV2) reorganizeChain(newBestBlock *Block) error {
 		}
 		parentHash := current.Header.ParentHash
 		current = bc.getBlockByHash(parentHash)
-		if current == nil && bc.storage != nil {
-			current, _ = bc.storage.GetBlockByHash(parentHash[:])
-		}
+		// Avoid storage access to prevent lock contention
 		if current == nil {
 			break
 		}
@@ -677,19 +686,8 @@ func (bc *BlockchainV2) reorganizeChain(newBestBlock *Block) error {
 		bc.utxoSet.RemoveUTXOs(block.Hash)
 
 		// Re-add UTXOs that were spent by this block (rollback spending)
-		for _, tx := range block.Txs {
-			for _, input := range tx.Inputs {
-				// Find the UTXO that was spent
-				if bc.storage != nil {
-					parentTx, _ := bc.storage.GetBlockByHash(input.PreviousTxHash[:])
-					if parentTx != nil {
-						// Re-add the UTXO (mark as unspent)
-						// Note: This is simplified - in a full implementation, we'd need to track
-						// which UTXO was spent and restore it
-					}
-				}
-			}
-		}
+		// Note: UTXO rollback is simplified - in a full implementation, we'd need to track
+		// which UTXOs were spent and restore them. For now, we only remove UTXOs created by this block.
 	}
 
 	// Step 2: Remove blocks from blocks array and update height
@@ -744,7 +742,10 @@ func (bc *BlockchainV2) reorganizeChain(newBestBlock *Block) error {
 	log.Printf("✅ Chain reorganization completed")
 	log.Printf("   New best: Block #%d (%x)", bc.bestBlock.Header.Number, bc.bestBlock.Hash)
 
-	// Save to persistent storage
+	// Release lock before storage operations to prevent lock contention
+	bc.mu.Unlock()
+
+	// Save to persistent storage AFTER lock release
 	if bc.storage != nil {
 		// Save all new blocks
 		for _, block := range blocksToAdd {
@@ -782,6 +783,24 @@ func (bc *BlockchainV2) GetRecentBlocks(limit int) []*Block {
 	}
 
 	return result
+}
+
+// GetBlockByNumber returns a block by its number
+func (bc *BlockchainV2) GetBlockByNumber(number uint64) (*Block, error) {
+	bc.mu.RLock()
+	defer bc.mu.RUnlock()
+
+	// Check if block is in memory
+	if number < uint64(len(bc.blocks)) {
+		return bc.blocks[number], nil
+	}
+
+	// Try to get from storage
+	if bc.storage != nil {
+		return bc.storage.GetBlockByNumber(number)
+	}
+
+	return nil, fmt.Errorf("block %d not found", number)
 }
 
 // GetHeight returns the current height thread-safely

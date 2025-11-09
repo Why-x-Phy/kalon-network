@@ -1,0 +1,8 @@
+Enter passphrase (optional): Wallet created successfully!
+Address: kalon10a365a2a6f1ba490fd38a49bd4e200d5684d9686
+Public Key: 3123b611f696f23ae57bc22dc8565ac1b717aa46a7f5053092451b3483a13081
+Mnemonic: draw else stairs sentence admit marriage used undo pitch actress company anger orphan enemy expose rough size pottery sorry album obscure cruel option sustain
+Wallet saved to: wallet-wallet1.json
+
+⚠️  IMPORTANT: Save your mnemonic phrase in a safe place!
+   You will need it to recover your wallet if you lose access.
