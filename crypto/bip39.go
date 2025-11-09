@@ -171,7 +171,10 @@ func (w *Wallet) SignTransaction(tx *core.Transaction) error {
 		return fmt.Errorf("failed to sign transaction: %v", err)
 	}
 
+	// Set signature and public key
 	tx.Signature = signature
+	tx.PublicKey = w.Keypair.Public
+
 	return nil
 }
 

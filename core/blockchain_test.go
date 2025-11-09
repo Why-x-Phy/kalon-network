@@ -8,12 +8,12 @@ import (
 // TestNewBlockchainV2 tests the creation of a new blockchain
 func TestNewBlockchainV2(t *testing.T) {
 	genesis := &GenesisConfig{
-		ChainID:              7718,
-		Name:                "Test Network",
-		Symbol:              "TEST",
-		BlockTimeTarget:     30,
-		InitialBlockReward:  5.0,
-		HalvingSchedule:     []HalvingEvent{
+		ChainID:            7718,
+		Name:               "Test Network",
+		Symbol:             "TEST",
+		BlockTimeTarget:    30,
+		InitialBlockReward: 5.0,
+		HalvingSchedule: []HalvingEvent{
 			{AfterBlocks: 259200, RewardMultiplier: 0.5},
 		},
 		Difficulty: DifficultyConfig{
@@ -23,7 +23,7 @@ func TestNewBlockchainV2(t *testing.T) {
 		},
 	}
 
-	bc := NewBlockchainV2(genesis)
+	bc := NewBlockchainV2(genesis, nil)
 	if bc == nil {
 		t.Fatal("Expected non-nil blockchain")
 	}
@@ -55,10 +55,10 @@ func TestBlockHash(t *testing.T) {
 	}
 
 	hash1 := block.CalculateHash()
-	
+
 	// Calculate again - should be the same
 	hash2 := block.CalculateHash()
-	
+
 	if hash1 != hash2 {
 		t.Error("Hash should be deterministic")
 	}
@@ -66,7 +66,7 @@ func TestBlockHash(t *testing.T) {
 	// Change nonce - hash should be different
 	block.Header.Nonce = 1
 	hash3 := block.CalculateHash()
-	
+
 	if hash1 == hash3 {
 		t.Error("Hash should change when block changes")
 	}
@@ -115,7 +115,7 @@ func TestTransactionValidation(t *testing.T) {
 func TestAddressString(t *testing.T) {
 	addr := Address{0x12, 0x34, 0x56}
 	str := addr.String()
-	
+
 	if len(str) != 40 {
 		t.Errorf("Expected 40 character hex string, got length %d", len(str))
 	}
@@ -135,8 +135,8 @@ func TestCalculateBlockReward(t *testing.T) {
 		},
 	}
 
-	bc := NewBlockchainV2(genesis)
-	
+	bc := NewBlockchainV2(genesis, nil)
+
 	// Block 1 should have full reward
 	reward1 := bc.calculateBlockReward(1)
 	if reward1 != 5000000 { // 5.0 * 1,000,000
@@ -149,4 +149,3 @@ func TestCalculateBlockReward(t *testing.T) {
 		t.Error("Reward should not be zero")
 	}
 }
-

@@ -117,6 +117,7 @@ type Transaction struct {
 	GasPrice  uint64  `json:"gasPrice"`
 	Data      []byte  `json:"data"`
 	Signature []byte  `json:"signature"`
+	PublicKey []byte  `json:"publicKey,omitempty"` // Public key for signature verification
 	Hash      Hash    `json:"hash"`
 	// UTXO-based fields
 	Inputs    []TxInput  `json:"inputs"`

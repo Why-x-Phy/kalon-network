@@ -36,8 +36,9 @@ func SignTransaction(keypair *Keypair, tx *core.Transaction) error {
 		return fmt.Errorf("failed to sign transaction: %v", err)
 	}
 
-	// Set signature
+	// Set signature and public key
 	tx.Signature = signature
+	tx.PublicKey = keypair.Public
 
 	return nil
 }

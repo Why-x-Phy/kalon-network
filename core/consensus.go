@@ -1,7 +1,9 @@
 package core
 
 import (
+	"crypto/ed25519"
 	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
 	"log"
 	"time"
@@ -116,9 +118,33 @@ func (cm *ConsensusManager) ValidateTransaction(tx *Transaction) error {
 		return fmt.Errorf("transaction fee insufficient for gas: %d < %d", tx.Fee, expectedFee)
 	}
 
-	// Validate signature (placeholder - would need actual signature verification)
+	// Validate signature
+	// Block reward transactions don't have signatures (they're created by the system)
+	if len(tx.Inputs) == 0 {
+		// This is a block reward transaction, skip signature validation
+		return nil
+	}
+
+	// Normal transactions must have a signature
 	if len(tx.Signature) == 0 {
 		return fmt.Errorf("transaction missing signature")
+	}
+
+	// Verify that the public key is present
+	if len(tx.PublicKey) == 0 {
+		return fmt.Errorf("transaction missing public key")
+	}
+
+	// Verify that the public key matches the address
+	publicKey := ed25519.PublicKey(tx.PublicKey)
+	expectedAddress := cm.addressFromPubKey(publicKey)
+	if expectedAddress != tx.From {
+		return fmt.Errorf("public key does not match transaction sender address")
+	}
+
+	// Verify the signature using the public key
+	if !cm.verifyTransactionSignature(tx, publicKey) {
+		return fmt.Errorf("invalid transaction signature")
 	}
 
 	return nil
@@ -331,4 +357,54 @@ func (cm *ConsensusManager) GetNetworkFeeRate() float64 {
 // GetTxFeeShareTreasury returns the transaction fee share for treasury
 func (cm *ConsensusManager) GetTxFeeShareTreasury() float64 {
 	return cm.genesis.NetworkFee.TxFeeShareTreasury
+}
+
+// addressFromPubKey calculates the address from a public key (to avoid import cycle)
+func (cm *ConsensusManager) addressFromPubKey(pub ed25519.PublicKey) Address {
+	hash := sha256.Sum256(pub)
+	var result Address
+	copy(result[:], hash[:20])
+	return result
+}
+
+// verifyTransactionSignature verifies a transaction signature (to avoid import cycle)
+func (cm *ConsensusManager) verifyTransactionSignature(tx *Transaction, publicKey ed25519.PublicKey) bool {
+	// Create message that was signed (same as in crypto/signature.go)
+	message := cm.createTransactionMessage(tx)
+
+	// Verify signature
+	return ed25519.Verify(publicKey, message, tx.Signature)
+}
+
+// createTransactionMessage creates the message to sign for a transaction (to avoid import cycle)
+func (cm *ConsensusManager) createTransactionMessage(tx *Transaction) []byte {
+	// Create message from transaction fields (excluding signature and public key)
+	data := make([]byte, 0, 200)
+	data = append(data, tx.From.Bytes()...)
+	data = append(data, tx.To.Bytes()...)
+
+	// Use compatible binary encoding for older Go versions
+	amountBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(amountBytes, tx.Amount)
+	data = append(data, amountBytes...)
+
+	nonceBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(nonceBytes, tx.Nonce)
+	data = append(data, nonceBytes...)
+
+	feeBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(feeBytes, tx.Fee)
+	data = append(data, feeBytes...)
+
+	gasUsedBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(gasUsedBytes, tx.GasUsed)
+	data = append(data, gasUsedBytes...)
+
+	gasPriceBytes := make([]byte, 8)
+	binary.BigEndian.PutUint64(gasPriceBytes, tx.GasPrice)
+	data = append(data, gasPriceBytes...)
+
+	data = append(data, tx.Data...)
+
+	return data
 }
