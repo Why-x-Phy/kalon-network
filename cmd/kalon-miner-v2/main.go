@@ -9,7 +9,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -21,6 +20,11 @@ import (
 	"github.com/kalon-network/kalon/core"
 	"github.com/kalon-network/kalon/crypto"
 )
+
+func init() {
+	// Set default log level for miner
+	core.SetLogLevelString("info")
+}
 
 // MinerV2 represents a professional miner
 type MinerV2 struct {
@@ -71,7 +75,8 @@ type RPCBlockchainV2 struct {
 func NewMinerV2(config *MinerConfig) *MinerV2 {
 	blockchain, err := NewRPCBlockchainV2(config.RPCURL)
 	if err != nil {
-		log.Fatalf("Failed to create RPC blockchain: %v", err)
+		core.LogError("Failed to create RPC blockchain: %v", err)
+		return nil
 	}
 
 	return &MinerV2{
@@ -102,10 +107,10 @@ func (m *MinerV2) Start() error {
 	m.running = true
 	m.mu.Unlock()
 
-	log.Printf("­ƒÜÇ Starting Professional Kalon Miner v2.0")
-	log.Printf("   Wallet: %s", m.config.Wallet)
-	log.Printf("   Threads: %d", m.config.Threads)
-	log.Printf("   RPC URL: %s", m.config.RPCURL)
+	core.LogInfo("Starting Professional Kalon Miner v2.0")
+	core.LogInfo("   Wallet: %s", m.config.Wallet)
+	core.LogInfo("   Threads: %d", m.config.Threads)
+	core.LogInfo("   RPC URL: %s", m.config.RPCURL)
 
 	// Start mining threads - CRITICAL: Use only 1 worker to prevent race conditions
 	for i := 0; i < 1; i++ {
@@ -134,7 +139,7 @@ func (m *MinerV2) Stop() error {
 	m.running = false
 	m.mu.Unlock()
 
-	log.Printf("­ƒøæ Stopping miner...")
+	core.LogInfo("Stopping miner...")
 
 	// Signal all workers to stop
 	close(m.stopChan)
@@ -142,7 +147,7 @@ func (m *MinerV2) Stop() error {
 	// Wait for all workers to finish
 	m.wg.Wait()
 
-	log.Printf("Ô£à Miner stopped successfully")
+	core.LogInfo("Miner stopped successfully")
 	return nil
 }
 
@@ -150,12 +155,12 @@ func (m *MinerV2) Stop() error {
 func (m *MinerV2) miningWorker(workerID int) {
 	defer m.wg.Done()
 
-	log.Printf("­ƒöº Mining worker %d started", workerID)
+	core.LogDebug("Mining worker %d started", workerID)
 
 	for {
 		select {
 		case <-m.stopChan:
-			log.Printf("­ƒöº Mining worker %d stopped", workerID)
+			core.LogDebug("Mining worker %d stopped", workerID)
 			return
 		default:
 			m.mineBlock(workerID)
@@ -168,7 +173,7 @@ func (m *MinerV2) mineBlock(workerID int) {
 	// Get miner address
 	miner, err := m.parseAddress(m.config.Wallet)
 	if err != nil {
-		log.Printf("ÔØî Failed to parse wallet address: %v", err)
+		core.LogError("Failed to parse wallet address: %v", err)
 		time.Sleep(1 * time.Second)
 		return
 	}
@@ -177,7 +182,7 @@ func (m *MinerV2) mineBlock(workerID int) {
 	// This prevents multiple workers from using the same outdated template
 	block := m.blockchain.CreateNewBlock(miner, []core.Transaction{}, m.config.Wallet)
 	if block == nil {
-		log.Printf("ÔØî Failed to create block template")
+		core.LogError("Failed to create block template")
 		time.Sleep(1 * time.Second)
 		return
 	}
@@ -185,7 +190,7 @@ func (m *MinerV2) mineBlock(workerID int) {
 	// CRITICAL: Double-check template validity before mining
 	currentHeight := m.getCurrentHeight()
 	if currentHeight >= block.Header.Number {
-		log.Printf("🔍 Template outdated: current height %d >= template height %d", currentHeight, block.Header.Number)
+		core.LogDebug("Template outdated: current height %d >= template height %d", currentHeight, block.Header.Number)
 		time.Sleep(100 * time.Millisecond)
 		return
 	}
@@ -193,7 +198,7 @@ func (m *MinerV2) mineBlock(workerID int) {
 	// Additional check: Verify parent hash is still current
 	bestBlock := m.getBestBlock()
 	if bestBlock != nil && bestBlock.Hash != block.Header.ParentHash {
-		log.Printf("🔍 Template parent hash outdated: expected %x, got %x", bestBlock.Hash, block.Header.ParentHash)
+		core.LogDebug("Template parent hash outdated: expected %x, got %x", bestBlock.Hash, block.Header.ParentHash)
 		time.Sleep(100 * time.Millisecond)
 		return
 	}
@@ -231,7 +236,7 @@ func (m *MinerV2) mineBlock(workerID int) {
 
 // handleBlockFound handles a found block
 func (m *MinerV2) handleBlockFound(block *core.Block, workerID int, duration time.Duration) {
-	log.Printf("­ƒÄë Block found by worker %d! Hash: %x, Nonce: %d, Time: %v",
+	core.LogInfo("Block found by worker %d! Hash: %x, Nonce: %d, Time: %v",
 		workerID, block.Hash, block.Header.Nonce, duration)
 
 	// Update stats
@@ -253,9 +258,9 @@ func (m *MinerV2) handleBlockFound(block *core.Block, workerID int, duration tim
 
 	// Submit block
 	if err := m.blockchain.AddBlock(block); err != nil {
-		log.Printf("ÔØî Failed to submit block: %v", err)
+		core.LogError("Failed to submit block: %v", err)
 	} else {
-		log.Printf("Ô£à Block #%d submitted successfully: %x", block.Header.Number, block.Hash)
+		core.LogInfo("Block #%d submitted successfully: %x", block.Header.Number, block.Hash)
 	}
 }
 
@@ -296,7 +301,7 @@ func (m *MinerV2) printStats() {
 	uptime := time.Since(startTime)
 	avgRate := float64(totalHashes) / uptime.Seconds()
 
-	log.Printf("­ƒôè Mining Stats - Uptime: %v, Total Hashes: %d, Blocks Found: %d, Avg Rate: %.2f H/s, Current Rate: %.2f H/s",
+	core.LogInfo("Mining Stats - Uptime: %v, Total Hashes: %d, Blocks Found: %d, Avg Rate: %.2f H/s, Current Rate: %.2f H/s",
 		uptime.Truncate(time.Second), totalHashes, blocksFound, avgRate, currentRate)
 }
 
@@ -319,9 +324,9 @@ func (m *MinerV2) processEvent(event MiningEvent) {
 	switch event.Type {
 	case "blockFound":
 		// Handle block found event
-		log.Printf("­ƒôó Event: Block found at %v", event.Timestamp)
+		core.LogDebug("Event: Block found at %v", event.Timestamp)
 	default:
-		log.Printf("­ƒôó Event: %s at %v", event.Type, event.Timestamp)
+		core.LogDebug("Event: %s at %v", event.Type, event.Timestamp)
 	}
 }
 
@@ -341,19 +346,19 @@ func (rpc *RPCBlockchainV2) CreateNewBlock(miner core.Address, txs []core.Transa
 
 	resp, err := rpc.callRPC(req)
 	if err != nil {
-		log.Printf("ÔØî Failed to create block template: %v", err)
+		core.LogError("Failed to create block template: %v", err)
 		return nil
 	}
 
 	if resp.Error != nil {
-		log.Printf("ÔØî RPC error: %s", resp.Error.Message)
+		core.LogError("RPC error: %s", resp.Error.Message)
 		return nil
 	}
 
 	// Parse response
 	result, ok := resp.Result.(map[string]interface{})
 	if !ok {
-		log.Printf("ÔØî Invalid response format")
+		core.LogError("Invalid response format")
 		return nil
 	}
 
@@ -366,7 +371,7 @@ func (rpc *RPCBlockchainV2) CreateNewBlock(miner core.Address, txs []core.Transa
 	// Parse parent hash
 	parentHashBytes, err := hex.DecodeString(parentHashStr)
 	if err != nil {
-		log.Printf("ÔØî Failed to parse parent hash: %v", err)
+		core.LogError("Failed to parse parent hash: %v", err)
 		return nil
 	}
 
@@ -450,7 +455,7 @@ func (rpc *RPCBlockchainV2) CreateNewBlock(miner core.Address, txs []core.Transa
 								// CRITICAL: Decode hex directly, don't use AddressFromString!
 								if addressBytes, err := hex.DecodeString(addressStr); err == nil && len(addressBytes) == 20 {
 									copy(output.Address[:], addressBytes)
-									log.Printf("🔍 Miner: Parsed output address: %s -> %x", addressStr, output.Address)
+									core.LogDebug("Miner: Parsed output address: %s -> %x", addressStr, output.Address)
 								}
 							}
 							if amount, ok := outputMap["amount"].(float64); ok {
@@ -469,7 +474,7 @@ func (rpc *RPCBlockchainV2) CreateNewBlock(miner core.Address, txs []core.Transa
 				}
 
 				blockTxs = append(blockTxs, tx)
-				log.Printf("­ƒÆ░ Loaded transaction with %d outputs, total amount: %d", len(tx.Outputs), tx.Amount)
+				core.LogDebug("Loaded transaction with %d outputs, total amount: %d", len(tx.Outputs), tx.Amount)
 			}
 		}
 	}
@@ -530,7 +535,7 @@ func (rpc *RPCBlockchainV2) CreateNewBlock(miner core.Address, txs []core.Transa
 	// Calculate hash
 	block.Hash = block.CalculateHash()
 
-	log.Printf("­ƒöº Created block template #%d with %d transactions and parent hash: %x", block.Header.Number, len(blockTxs), block.Header.ParentHash)
+	core.LogDebug("Created block template #%d with %d transactions and parent hash: %x", block.Header.Number, len(blockTxs), block.Header.ParentHash)
 
 	return block
 }
@@ -597,7 +602,7 @@ func (rpc *RPCBlockchainV2) AddBlock(block *core.Block) error {
 		return fmt.Errorf("RPC error: %s", resp.Error.Message)
 	}
 
-	log.Printf("Ô£à Block #%d submitted successfully", block.Header.Number)
+	core.LogDebug("Block #%d submitted successfully", block.Header.Number)
 	return nil
 }
 
@@ -682,7 +687,7 @@ func (m *MinerV2) parseAddress(address string) (core.Address, error) {
 		if err == nil && len(decodedBytes) == 20 {
 			var addr core.Address
 			copy(addr[:], decodedBytes)
-			log.Printf("✅ Parsed Bech32 address: %s -> %x", address, addr)
+			core.LogDebug("Parsed Bech32 address: %s -> %x", address, addr)
 			return addr, nil
 		}
 	}
@@ -803,11 +808,16 @@ func main() {
 		threads       = flag.Int("threads", 2, "Number of mining threads")
 		rpcURL        = flag.String("rpc", "http://localhost:16316", "RPC server URL")
 		statsInterval = flag.Duration("stats", 30*time.Second, "Statistics reporting interval")
+		logLevel      = flag.String("loglevel", "info", "Log level (debug, info, warn, error)")
 	)
 	flag.Parse()
 
+	// Set log level
+	core.SetLogLevelString(*logLevel)
+
 	if *wallet == "" {
-		log.Fatal("ÔØî Wallet address is required")
+		core.LogError("Wallet address is required")
+		os.Exit(1)
 	}
 
 	config := &MinerConfig{
@@ -821,7 +831,8 @@ func main() {
 
 	// Start miner
 	if err := miner.Start(); err != nil {
-		log.Fatalf("ÔØî Failed to start miner: %v", err)
+		core.LogError("Failed to start miner: %v", err)
+		os.Exit(1)
 	}
 
 	// Wait for shutdown signal
@@ -829,10 +840,10 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	<-sigChan
-	log.Printf("­ƒøæ Shutdown signal received")
+	core.LogInfo("Shutdown signal received")
 
 	// Stop miner
 	if err := miner.Stop(); err != nil {
-		log.Printf("ÔØî Error stopping miner: %v", err)
+		core.LogError("Error stopping miner: %v", err)
 	}
 }

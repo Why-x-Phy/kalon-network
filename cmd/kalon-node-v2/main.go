@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -45,8 +44,12 @@ func main() {
 		certFile  = flag.String("certfile", "", "SSL certificate file path")
 		keyFile   = flag.String("keyfile", "", "SSL private key file path")
 		p2pAddr   = flag.String("p2p", ":17335", "P2P server address")
+		logLevel  = flag.String("loglevel", "info", "Log level (debug, info, warn, error)")
 	)
 	flag.Parse()
+
+	// Set log level
+	core.SetLogLevelString(*logLevel)
 
 	config := &NodeConfig{
 		DataDir:   *dataDir,
@@ -62,7 +65,8 @@ func main() {
 
 	// Start node
 	if err := node.Start(); err != nil {
-		log.Fatalf("ÔØî Failed to start node: %v", err)
+		core.LogError("Failed to start node: %v", err)
+		os.Exit(1)
 	}
 
 	// Wait for shutdown signal
@@ -70,11 +74,11 @@ func main() {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	<-sigChan
-	log.Printf("­ƒøæ Shutdown signal received")
+	core.LogInfo("Shutdown signal received")
 
 	// Stop node
 	if err := node.Stop(); err != nil {
-		log.Printf("ÔØî Error stopping node: %v", err)
+		core.LogError("Error stopping node: %v", err)
 	}
 }
 
@@ -87,11 +91,11 @@ func NewNodeV2(config *NodeConfig) *NodeV2 {
 
 // Start starts the node professionally
 func (n *NodeV2) Start() error {
-	log.Printf("­ƒÜÇ Starting Professional Kalon Node v2.0")
-	log.Printf("   Data Dir: %s", n.config.DataDir)
-	log.Printf("   Genesis: %s", n.config.Genesis)
-	log.Printf("   RPC: %s", n.config.RPCAddr)
-	log.Printf("   P2P: %s", n.config.P2PAddr)
+	core.LogInfo("Starting Professional Kalon Node v2.0")
+	core.LogInfo("   Data Dir: %s", n.config.DataDir)
+	core.LogInfo("   Genesis: %s", n.config.Genesis)
+	core.LogInfo("   RPC: %s", n.config.RPCAddr)
+	core.LogInfo("   P2P: %s", n.config.P2PAddr)
 
 	// Load genesis configuration
 	genesis, err := n.loadGenesis()
@@ -101,10 +105,10 @@ func (n *NodeV2) Start() error {
 
 	// Initialize persistent storage
 	dbPath := n.config.DataDir + "/chaindb"
-	log.Printf("🔧 Initializing persistent storage at %s", dbPath)
+	core.LogInfo("Initializing persistent storage at %s", dbPath)
 	levelDBStorage, err := storage.NewLevelDBStorage(dbPath)
 	if err != nil {
-		log.Printf("⚠️ Failed to initialize LevelDB: %v. Continuing in-memory mode.", err)
+		core.LogWarn("Failed to initialize LevelDB: %v. Continuing in-memory mode.", err)
 		// Create blockchain without persistence
 		n.blockchain = core.NewBlockchainV2(genesis, nil)
 	} else {
@@ -112,7 +116,7 @@ func (n *NodeV2) Start() error {
 		persister := storage.NewBlockStorage(levelDBStorage)
 		n.blockchain = core.NewBlockchainV2(genesis, persister)
 	}
-	log.Printf("✅ Blockchain initialized with height: %d", n.blockchain.GetHeight())
+	core.LogInfo("Blockchain initialized with height: %d", n.blockchain.GetHeight())
 
 	// Initialize P2P network first (before RPC server)
 	p2pConfig := &network.P2PConfig{
@@ -137,21 +141,21 @@ func (n *NodeV2) Start() error {
 	// Configure HTTPS if provided
 	if n.config.HTTPSAddr != "" && n.config.CertFile != "" && n.config.KeyFile != "" {
 		n.rpcServer.SetHTTPS(n.config.HTTPSAddr, n.config.CertFile, n.config.KeyFile)
-		log.Printf("🔒 HTTPS RPC configured: %s (cert: %s, key: %s)", n.config.HTTPSAddr, n.config.CertFile, n.config.KeyFile)
+		core.LogInfo("HTTPS RPC configured: %s (cert: %s, key: %s)", n.config.HTTPSAddr, n.config.CertFile, n.config.KeyFile)
 	}
 
 	// Start RPC server
 	go func() {
 		if err := n.rpcServer.Start(); err != nil {
-			log.Printf("⚠️ RPC Server error: %v", err)
+			core.LogWarn("RPC Server error: %v", err)
 		}
 	}()
 
 	// Start P2P server
 	if err := n.p2p.Start(); err != nil {
-		log.Printf("⚠️ Failed to start P2P: %v", err)
+		core.LogWarn("Failed to start P2P: %v", err)
 	} else {
-		log.Printf("✅ P2P network started on %s", n.config.P2PAddr)
+		core.LogInfo("P2P network started on %s", n.config.P2PAddr)
 	}
 
 	// Setup P2P integration with blockchain
@@ -160,7 +164,7 @@ func (n *NodeV2) Start() error {
 	// Wait a moment for server to start
 	time.Sleep(1 * time.Second)
 
-	log.Printf("✅ Node started successfully")
+	core.LogInfo("Node started successfully")
 	n.running = true
 
 	return nil
@@ -172,7 +176,7 @@ func (n *NodeV2) Stop() error {
 		return nil
 	}
 
-	log.Printf("­ƒøæ Stopping node...")
+	core.LogInfo("Stopping node...")
 
 	// Stop RPC server
 	if n.rpcServer != nil {
@@ -187,11 +191,11 @@ func (n *NodeV2) Stop() error {
 	// Close blockchain storage
 	if n.blockchain != nil {
 		if err := n.blockchain.Close(); err != nil {
-			log.Printf("⚠️ Error closing blockchain: %v", err)
+			core.LogWarn("Error closing blockchain: %v", err)
 		}
 	}
 
-	log.Printf("✅ Node stopped successfully")
+	core.LogInfo("Node stopped successfully")
 	n.running = false
 
 	return nil
@@ -202,7 +206,7 @@ func (n *NodeV2) loadGenesis() (*core.GenesisConfig, error) {
 	// Load genesis from file
 	data, err := os.ReadFile(n.config.Genesis)
 	if err != nil {
-		log.Printf("⚠️ Failed to read genesis file %s: %v. Using defaults.", n.config.Genesis, err)
+		core.LogWarn("Failed to read genesis file %s: %v. Using defaults.", n.config.Genesis, err)
 		// Return default genesis with proper difficulty
 		return &core.GenesisConfig{
 			ChainID:            7718,
@@ -254,7 +258,7 @@ func (n *NodeV2) loadGenesis() (*core.GenesisConfig, error) {
 		return nil, fmt.Errorf("failed to parse genesis JSON: %w", err)
 	}
 
-	log.Printf("✅ Loaded genesis from %s", n.config.Genesis)
+	core.LogInfo("Loaded genesis from %s", n.config.Genesis)
 	return &genesis, nil
 }
 
@@ -271,9 +275,9 @@ func (n *NodeV2) setupP2PIntegration() {
 					if networkBlock != nil {
 						// Broadcast to all peers
 						if err := n.p2p.BroadcastBlock(networkBlock); err != nil {
-							log.Printf("⚠️ Failed to broadcast block: %v", err)
+							core.LogWarn("Failed to broadcast block: %v", err)
 						} else {
-							log.Printf("📡 Broadcasted block #%d to peers", block.Header.Number)
+							core.LogDebug("Broadcasted block #%d to peers", block.Header.Number)
 						}
 					}
 				}
@@ -293,12 +297,12 @@ func (n *NodeV2) setupP2PIntegration() {
 		if err := n.blockchain.AddBlockV2(coreBlock); err != nil {
 			// Don't log error if block already exists (common case)
 			if err.Error() != "block already exists" {
-				log.Printf("⚠️ Failed to add block from peer: %v", err)
+				core.LogWarn("Failed to add block from peer: %v", err)
 			}
 			return err
 		}
 
-		log.Printf("📥 Received and added block #%d from peer", coreBlock.Header.Number)
+		core.LogDebug("Received and added block #%d from peer", coreBlock.Header.Number)
 		return nil
 	})
 
@@ -315,7 +319,7 @@ func (n *NodeV2) setupP2PIntegration() {
 		// For now, we'll just add it to the mempool
 		// TODO: Add proper transaction validation
 		n.blockchain.GetMempool().AddTransaction(coreTx)
-		log.Printf("📥 Received transaction from peer: %x", coreTx.Hash)
+		core.LogDebug("Received transaction from peer: %x", coreTx.Hash)
 		return nil
 	})
 
@@ -352,5 +356,5 @@ func (n *NodeV2) setupP2PIntegration() {
 		return blocks, nil
 	})
 
-	log.Printf("✅ P2P integration with blockchain setup completed")
+	core.LogInfo("P2P integration with blockchain setup completed")
 }

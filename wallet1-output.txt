@@ -1,0 +1,8 @@
+Enter passphrase (optional): Wallet created successfully!
+Address: kalon1015400426c74c0533e50579e59b62be2d74c5325
+Public Key: 7d62e33960f3ab5353aa276a1e8874543373eee1f10fa5881e6c052f46b3c364
+Mnemonic: despair youth snack execute shoe jewel inner blue club donkey basket shell way capable tent owner borrow consider pen erase media grit bone split
+Wallet saved to: wallet-test-1.json
+
+⚠️  IMPORTANT: Save your mnemonic phrase in a safe place!
+   You will need it to recover your wallet if you lose access.

@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 )
@@ -102,11 +101,11 @@ func NewBlockchainV2(genesis *GenesisConfig, persister BlockPersister) *Blockcha
 		bc.addBlockV2(genesisBlock)
 
 		// Restore snapshot from genesis config if available
-		log.Printf("🔍 DEBUG: Checking for snapshot in genesis config...")
+		LogDebug("Checking for snapshot in genesis config...")
 		if err := bc.CreateSnapshotFromGenesis(); err != nil {
-			log.Printf("⚠️ Failed to restore snapshot from genesis: %v", err)
+			LogWarn("Failed to restore snapshot from genesis: %v", err)
 		} else {
-			log.Printf("✅ Snapshot check completed")
+			LogInfo("Snapshot check completed")
 		}
 	}
 
@@ -187,7 +186,7 @@ func (bc *BlockchainV2) addBlockV2(block *Block) error {
 	// Check if block already exists (duplicate)
 	blockHashKey := hex.EncodeToString(block.Hash[:])
 	if existingBlock := bc.blockIndex[blockHashKey]; existingBlock != nil {
-		log.Printf("⚠️ Block #%d already exists: %x", block.Header.Number, block.Hash)
+		LogWarn("Block #%d already exists: %x", block.Header.Number, block.Hash)
 		bc.mu.Unlock()
 		return fmt.Errorf("block already exists")
 	}
@@ -203,7 +202,7 @@ func (bc *BlockchainV2) addBlockV2(block *Block) error {
 			// Same height but different hash = fork
 			if block.Hash != bc.bestBlock.Hash {
 				isFork = true
-				log.Printf("🔀 Fork detected! Block #%d: current=%x, new=%x",
+				LogInfo("Fork detected! Block #%d: current=%x, new=%x",
 					block.Header.Number, bc.bestBlock.Hash, block.Hash)
 				// For fork at same height, parent is the same as bestBlock's parent
 				if bc.bestBlock.Header.Number > 0 {
@@ -245,11 +244,11 @@ func (bc *BlockchainV2) addBlockV2(block *Block) error {
 			if forkBlocks, exists := bc.forkBlocks[parentHashKey]; exists && len(forkBlocks) > 0 {
 				// Parent is a fork block
 				isFork = true
-				log.Printf("🔀 Fork detected! Block #%d extends fork chain", block.Header.Number)
+				LogInfo("Fork detected! Block #%d extends fork chain", block.Header.Number)
 			} else if parentBlock.Hash != bc.bestBlock.Hash {
 				// Parent is different from bestBlock - this is a fork
 				isFork = true
-				log.Printf("🔀 Fork detected! Block #%d has different parent: %x (bestBlock: %x)",
+				LogInfo("Fork detected! Block #%d has different parent: %x (bestBlock: %x)",
 					block.Header.Number, parentHash, bc.bestBlock.Hash)
 			}
 		} else {
@@ -277,11 +276,11 @@ func (bc *BlockchainV2) addBlockV2(block *Block) error {
 		currentChainLength := bc.calculateChainLength(bc.bestBlock)
 		newChainLength := bc.calculateChainLength(block)
 
-		log.Printf("📊 Chain lengths - Current: %d, New: %d", currentChainLength, newChainLength)
+		LogDebug("Chain lengths - Current: %d, New: %d", currentChainLength, newChainLength)
 
 		// Longest chain rule: if new chain is longer, reorganize
 		if newChainLength > currentChainLength {
-			log.Printf("🔄 Reorganizing chain: new chain is longer (%d > %d)",
+			LogInfo("Reorganizing chain: new chain is longer (%d > %d)",
 				newChainLength, currentChainLength)
 
 			// Release lock before reorganization (it will re-acquire)
@@ -298,16 +297,16 @@ func (bc *BlockchainV2) addBlockV2(block *Block) error {
 			// Save to persistent storage
 			if bc.storage != nil {
 				if err := bc.storage.StoreBlock(block); err != nil {
-					log.Printf("⚠️ Failed to save block to storage: %v", err)
+					LogWarn("Failed to save block to storage: %v", err)
 				} else {
-					log.Printf("✅ Block #%d saved to storage", block.Header.Number)
+					LogDebug("Block #%d saved to storage", block.Header.Number)
 				}
 			}
 
 			return nil
 		} else {
 			// New chain is shorter or equal - keep current chain
-			log.Printf("✅ Keeping current chain (length %d >= %d)",
+			LogDebug("Keeping current chain (length %d >= %d)",
 				currentChainLength, newChainLength)
 			bc.mu.Unlock()
 			return nil
@@ -345,13 +344,13 @@ func (bc *BlockchainV2) addBlockV2(block *Block) error {
 	// This I/O operation can take 100-500ms and should not block read operations
 	if bc.storage != nil {
 		if err := bc.storage.StoreBlock(block); err != nil {
-			log.Printf("⚠️ Failed to save block to storage: %v", err)
+			LogWarn("Failed to save block to storage: %v", err)
 		} else {
-			log.Printf("✅ Block #%d saved to storage", block.Header.Number)
+			LogDebug("Block #%d saved to storage", block.Header.Number)
 		}
 	}
 
-	log.Printf("✅ Block #%d added successfully: %x", block.Header.Number, block.Hash)
+	LogInfo("Block #%d added successfully: %x", block.Header.Number, block.Hash)
 
 	return nil
 }
@@ -622,9 +621,9 @@ func (bc *BlockchainV2) reorganizeChain(newBestBlock *Block) error {
 		return fmt.Errorf("no current best block to reorganize from")
 	}
 
-	log.Printf("🔄 Starting chain reorganization...")
-	log.Printf("   Current best: Block #%d (%x)", bc.bestBlock.Header.Number, bc.bestBlock.Hash)
-	log.Printf("   New best: Block #%d (%x)", newBestBlock.Header.Number, newBestBlock.Hash)
+	LogInfo("Starting chain reorganization...")
+	LogInfo("   Current best: Block #%d (%x)", bc.bestBlock.Header.Number, bc.bestBlock.Hash)
+	LogInfo("   New best: Block #%d (%x)", newBestBlock.Header.Number, newBestBlock.Hash)
 
 	// Find common parent
 	commonParent := bc.findCommonParent(bc.bestBlock, newBestBlock)
@@ -633,7 +632,7 @@ func (bc *BlockchainV2) reorganizeChain(newBestBlock *Block) error {
 		return fmt.Errorf("no common parent found between chains")
 	}
 
-	log.Printf("   Common parent: Block #%d (%x)", commonParent.Header.Number, commonParent.Hash)
+	LogInfo("   Common parent: Block #%d (%x)", commonParent.Header.Number, commonParent.Hash)
 
 	// Build list of blocks to remove (from current chain, after common parent)
 	// Use only in-memory index to avoid lock contention
@@ -674,13 +673,13 @@ func (bc *BlockchainV2) reorganizeChain(newBestBlock *Block) error {
 		blocksToAdd[i], blocksToAdd[j] = blocksToAdd[j], blocksToAdd[i]
 	}
 
-	log.Printf("   Blocks to remove: %d", len(blocksToRemove))
-	log.Printf("   Blocks to add: %d", len(blocksToAdd))
+	LogInfo("   Blocks to remove: %d", len(blocksToRemove))
+	LogInfo("   Blocks to add: %d", len(blocksToAdd))
 
 	// Step 1: Rollback UTXOs from removed blocks (in reverse order)
 	for i := len(blocksToRemove) - 1; i >= 0; i-- {
 		block := blocksToRemove[i]
-		log.Printf("   Rolling back Block #%d (%x)", block.Header.Number, block.Hash)
+		LogDebug("   Rolling back Block #%d (%x)", block.Header.Number, block.Hash)
 
 		// Remove UTXOs created by this block
 		bc.utxoSet.RemoveUTXOs(block.Hash)
@@ -708,7 +707,7 @@ func (bc *BlockchainV2) reorganizeChain(newBestBlock *Block) error {
 
 	// Step 3: Add new blocks and process UTXOs
 	for _, block := range blocksToAdd {
-		log.Printf("   Adding Block #%d (%x)", block.Header.Number, block.Hash)
+		LogDebug("   Adding Block #%d (%x)", block.Header.Number, block.Hash)
 
 		// Process UTXOs for all transactions in the block
 		for _, tx := range block.Txs {
@@ -739,8 +738,8 @@ func (bc *BlockchainV2) reorganizeChain(newBestBlock *Block) error {
 		"added":   len(blocksToAdd),
 	})
 
-	log.Printf("✅ Chain reorganization completed")
-	log.Printf("   New best: Block #%d (%x)", bc.bestBlock.Header.Number, bc.bestBlock.Hash)
+	LogInfo("Chain reorganization completed")
+	LogInfo("   New best: Block #%d (%x)", bc.bestBlock.Header.Number, bc.bestBlock.Hash)
 
 	// Release lock before storage operations to prevent lock contention
 	bc.mu.Unlock()
@@ -750,7 +749,7 @@ func (bc *BlockchainV2) reorganizeChain(newBestBlock *Block) error {
 		// Save all new blocks
 		for _, block := range blocksToAdd {
 			if err := bc.storage.StoreBlock(block); err != nil {
-				log.Printf("⚠️ Failed to save block #%d to storage: %v", block.Header.Number, err)
+				LogWarn("Failed to save block #%d to storage: %v", block.Header.Number, err)
 			}
 		}
 	}
@@ -900,7 +899,7 @@ func (m *Mempool) AddTransaction(tx *Transaction) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.transactions[hex.EncodeToString(tx.Hash[:])] = tx
-	log.Printf("📥 Transaction added to mempool: %x", tx.Hash)
+	LogDebug("Transaction added to mempool: %x", tx.Hash)
 }
 
 // GetPendingTransactions returns all pending transactions
@@ -1028,7 +1027,7 @@ func (bc *BlockchainV2) createBlockRewardTransactionPtr(recipient Address, amoun
 
 // createBlockRewardTransaction creates a block reward transaction
 func (bc *BlockchainV2) createBlockRewardTransaction(miner Address, amount uint64) Transaction {
-	log.Printf("🔍 DEBUG createBlockRewardTransaction - Miner address: %x, Amount: %d", miner, amount)
+	LogDebug("createBlockRewardTransaction - Miner address: %x, Amount: %d", miner, amount)
 
 	// Create a special coinbase transaction (no inputs, only output)
 	tx := Transaction{
@@ -1051,7 +1050,7 @@ func (bc *BlockchainV2) createBlockRewardTransaction(miner Address, amount uint6
 		Timestamp: time.Now(),
 	}
 
-	log.Printf("🔍 DEBUG createBlockRewardTransaction - Created TX with output address: %x", tx.Outputs[0].Address)
+	LogDebug("createBlockRewardTransaction - Created TX with output address: %x", tx.Outputs[0].Address)
 
 	// Calculate transaction hash
 	tx.Hash = CalculateTransactionHash(&tx)
@@ -1066,43 +1065,43 @@ func (bc *BlockchainV2) AddBlock(block *Block) error {
 
 // loadChainFromStorage loads the blockchain from persistent storage
 func (bc *BlockchainV2) loadChainFromStorage() {
-	log.Printf("🔍 DEBUG: loadChainFromStorage called")
+	LogDebug("loadChainFromStorage called")
 	if bc.storage == nil {
-		log.Printf("⚠️ Storage is nil, skipping load")
+		LogWarn("Storage is nil, skipping load")
 		return
 	}
 
-	log.Printf("🔍 DEBUG: Getting best block from storage")
+	LogDebug("Getting best block from storage")
 	// Get the best block
 	bestBlock, err := bc.storage.GetBestBlock()
 	if err != nil {
-		log.Printf("⚠️ No existing chain found, starting fresh (error: %v)", err)
+		LogWarn("No existing chain found, starting fresh (error: %v)", err)
 		return
 	}
 
 	if bestBlock == nil {
-		log.Printf("⚠️ Best block is nil, starting fresh")
+		LogWarn("Best block is nil, starting fresh")
 		return
 	}
 
-	log.Printf("🔍 DEBUG: Best block found - Height: %d, Hash: %x", bestBlock.Header.Number, bestBlock.Hash)
+	LogDebug("Best block found - Height: %d, Hash: %x", bestBlock.Header.Number, bestBlock.Hash)
 
 	// Reconstruct chain by loading blocks from storage
 	bc.height = bestBlock.Header.Number
 	bc.bestBlock = bestBlock
 
-	log.Printf("🔍 DEBUG: Loading %d blocks from storage", bc.height+1)
+	LogDebug("Loading %d blocks from storage", bc.height+1)
 
 	// Load all blocks from genesis to best block
 	for i := uint64(0); i <= bc.height; i++ {
 		// Progress logging every 10 blocks
 		if i%10 == 0 || i == bc.height {
-			log.Printf("🔄 Loading block %d/%d from storage...", i, bc.height)
+			LogDebug("Loading block %d/%d from storage...", i, bc.height)
 		}
 
 		block, err := bc.storage.GetBlockByNumber(i)
 		if err != nil || block == nil {
-			log.Printf("⚠️ Failed to load block %d: %v", i, err)
+			LogWarn("Failed to load block %d: %v", i, err)
 			// Reset and start fresh
 			bc.height = 0
 			bc.bestBlock = nil
@@ -1122,7 +1121,7 @@ func (bc *BlockchainV2) loadChainFromStorage() {
 		}
 	}
 
-	log.Printf("✅ Loaded blockchain from storage - Height: %d, UTXOs restored", bc.height)
+	LogInfo("Loaded blockchain from storage - Height: %d, UTXOs restored", bc.height)
 }
 
 // Close closes the blockchain and its storage

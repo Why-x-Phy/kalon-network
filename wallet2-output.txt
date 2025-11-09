@@ -1,0 +1,8 @@
+Enter passphrase (optional): Wallet created successfully!
+Address: kalon19d5c9ca0d5d64991a65749843a6c0a0575062807
+Public Key: 6a1aa92b167d250bed8ed4bcff18da6aa0a3b240c372c93748f7f37d62e99f66
+Mnemonic: pulse light remove seat swim truth paddle pet slow curious fox stuff rifle patrol height absent into away usual sheriff adjust awkward lottery doll
+Wallet saved to: wallet-test-2.json
+
+⚠️  IMPORTANT: Save your mnemonic phrase in a safe place!
+   You will need it to recover your wallet if you lose access.

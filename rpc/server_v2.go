@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"runtime/debug"
 	"strings"
@@ -14,6 +13,11 @@ import (
 
 	"github.com/kalon-network/kalon/core"
 )
+
+func init() {
+	// Set default log level for RPC server
+	core.SetLogLevelString("info")
+}
 
 // RPCRequest represents a JSON-RPC request
 type RPCRequest struct {
@@ -134,7 +138,7 @@ func (s *ServerV2) Start() error {
 		MaxHeaderBytes: 1 << 20, // 1MB
 	}
 
-	log.Printf("🚀 Professional RPC Server starting on %s", s.addr)
+	core.LogInfo("Professional RPC Server starting on %s", s.addr)
 
 	// Store server reference for shutdown BEFORE starting
 	s.server = server
@@ -142,10 +146,10 @@ func (s *ServerV2) Start() error {
 	// Start server in goroutine
 	started := make(chan bool, 1)
 	go func() {
-		log.Printf("🔧 Attempting to bind to %s", s.addr)
+		core.LogDebug("Attempting to bind to %s", s.addr)
 		started <- true
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("❌ RPC Server error: %v", err)
+			core.LogError("RPC Server error: %v", err)
 		}
 	}()
 
@@ -156,7 +160,7 @@ func (s *ServerV2) Start() error {
 	time.Sleep(1 * time.Second)
 
 	// Log success
-	log.Printf("✅ RPC Server should be listening on %s", s.addr)
+	core.LogInfo("RPC Server should be listening on %s", s.addr)
 
 	// Start HTTPS server if configured
 	if s.httpsAddr != "" && s.certFile != "" && s.keyFile != "" {
@@ -177,20 +181,20 @@ func (s *ServerV2) Start() error {
 
 			s.httpsServer = httpsServer
 
-			log.Printf("🔒 HTTPS RPC Server starting on %s", s.httpsAddr)
-			log.Printf("   Certificate: %s", s.certFile)
-			log.Printf("   Key: %s", s.keyFile)
+			core.LogInfo("HTTPS RPC Server starting on %s", s.httpsAddr)
+			core.LogInfo("   Certificate: %s", s.certFile)
+			core.LogInfo("   Key: %s", s.keyFile)
 
 			// ListenAndServeTLS will validate certificate files on start
 			// If files are missing or invalid, it will return an error
 			// We catch and log it, but don't crash the Node
 			if err := httpsServer.ListenAndServeTLS(s.certFile, s.keyFile); err != nil && err != http.ErrServerClosed {
-				log.Printf("❌ HTTPS RPC Server error: %v", err)
-				log.Printf("   Check if certificate files exist: %s, %s", s.certFile, s.keyFile)
+				core.LogError("HTTPS RPC Server error: %v", err)
+				core.LogError("   Check if certificate files exist: %s, %s", s.certFile, s.keyFile)
 			}
 		}()
 		time.Sleep(500 * time.Millisecond) // Give HTTPS server time to start
-		log.Printf("✅ HTTPS RPC Server should be listening on %s", s.httpsAddr)
+		core.LogInfo("HTTPS RPC Server should be listening on %s", s.httpsAddr)
 	}
 
 	// Handle shutdown in background (non-blocking)
@@ -201,12 +205,12 @@ func (s *ServerV2) Start() error {
 		defer cancel()
 		if s.server != nil {
 			if err := s.server.Shutdown(ctx); err != nil {
-				log.Printf("⚠️ Error shutting down HTTP RPC server: %v", err)
+				core.LogWarn("Error shutting down HTTP RPC server: %v", err)
 			}
 		}
 		if s.httpsServer != nil {
 			if err := s.httpsServer.Shutdown(ctx); err != nil {
-				log.Printf("⚠️ Error shutting down HTTPS RPC server: %v", err)
+				core.LogWarn("Error shutting down HTTPS RPC server: %v", err)
 			}
 		}
 	}()
@@ -247,7 +251,7 @@ func (s *ServerV2) handleRequest(w http.ResponseWriter, r *http.Request) {
 	// CRITICAL: Panic recovery to prevent server crashes
 	defer func() {
 		if rec := recover(); rec != nil {
-			log.Printf("❌ PANIC in handleRequest: %v\nStack trace: %s", rec, debug.Stack())
+			core.LogError("PANIC in handleRequest: %v\nStack trace: %s", rec, debug.Stack())
 
 			// Try to write error response
 			w.Header().Set("Content-Type", "application/json")
@@ -304,8 +308,8 @@ func (s *ServerV2) handleRequest(w http.ResponseWriter, r *http.Request) {
 	// Wrap in additional safety check
 	jsonBytes, err := json.Marshal(response)
 	if err != nil {
-		log.Printf("❌ Failed to marshal RPC response: %v", err)
-		log.Printf("❌ Response type: %T, Response: %+v", response, response)
+		core.LogError("Failed to marshal RPC response: %v", err)
+		core.LogError("Response type: %T, Response: %+v", response, response)
 
 		// Write safe error response instead of crashing
 		errorResponse := map[string]interface{}{
@@ -327,7 +331,7 @@ func (s *ServerV2) handleRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := w.Write(jsonBytes); err != nil {
-		log.Printf("❌ Failed to write RPC response: %v", err)
+		core.LogError("Failed to write RPC response: %v", err)
 	}
 }
 
@@ -405,7 +409,7 @@ func (s *ServerV2) handleCreateSnapshot(req *RPCRequest) *RPCResponse {
 		if f, ok := params["filename"].(string); ok && f != "" {
 			filename = f
 			if err := s.blockchain.SnapshotManager.SaveSnapshot(filename); err != nil {
-				log.Printf("⚠️ Failed to save snapshot to file: %v", err)
+				core.LogWarn("Failed to save snapshot to file: %v", err)
 			}
 		}
 	}
@@ -660,9 +664,9 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 			decodedBytes, err := hex.DecodeString(hexStr)
 			if err == nil && len(decodedBytes) == 20 {
 				copy(miner[:], decodedBytes)
-				log.Printf("✅ Parsed kalon1+hex address successfully")
+				core.LogDebug("Parsed kalon1+hex address successfully")
 			} else {
-				log.Printf("❌ Failed to decode kalon1+hex: %v", err)
+				core.LogError("Failed to decode kalon1+hex: %v", err)
 				return &RPCResponse{
 					JSONRPC: "2.0",
 					Error:   &RPCError{Code: -32602, Message: "Invalid miner address"},
@@ -671,7 +675,7 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 			}
 		} else {
 			// Not a valid hex after kalon1
-			log.Printf("❌ Invalid: kalon1 address has wrong length: %d", len(hexStr))
+			core.LogError("Invalid: kalon1 address has wrong length: %d", len(hexStr))
 			return &RPCResponse{
 				JSONRPC: "2.0",
 				Error:   &RPCError{Code: -32602, Message: "Invalid miner address format"},
@@ -684,9 +688,9 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 			decodedBytes, err := hex.DecodeString(minerStr)
 			if err == nil && len(decodedBytes) == 20 {
 				copy(miner[:], decodedBytes)
-				log.Printf("✅ Parsed plain 40-char hex address")
+				core.LogDebug("Parsed plain 40-char hex address")
 			} else {
-				log.Printf("❌ Invalid address format: %s", minerStr)
+				core.LogError("Invalid address format: %s", minerStr)
 				return &RPCResponse{
 					JSONRPC: "2.0",
 					Error:   &RPCError{Code: -32602, Message: "Invalid miner address format"},
@@ -694,7 +698,7 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 				}
 			}
 		} else {
-			log.Printf("❌ Invalid address format: %s (len=%d)", minerStr, len(minerStr))
+			core.LogError("Invalid address format: %s (len=%d)", minerStr, len(minerStr))
 			return &RPCResponse{
 				JSONRPC: "2.0",
 				Error:   &RPCError{Code: -32602, Message: "Invalid miner address format"},
@@ -702,7 +706,7 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 			}
 		}
 	}
-	log.Printf("🔍 Miner address bytes: %x", miner)
+	core.LogDebug("Miner address bytes: %x", miner)
 
 	// Get current blockchain state
 	bestBlock := s.blockchain.GetBestBlock()
@@ -720,11 +724,11 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 
 	// Create new block with rewards using CreateNewBlockV2
 	block := s.blockchain.CreateNewBlockV2(miner, []core.Transaction{})
-	log.Printf("🔍 Block created with %d transactions", len(block.Txs))
-	log.Printf("🔍 Miner address in block: %x", block.Header.Miner)
+	core.LogDebug("Block created with %d transactions", len(block.Txs))
+	core.LogDebug("Miner address in block: %x", block.Header.Miner)
 	if len(block.Txs) > 0 && len(block.Txs[0].Outputs) > 0 {
-		log.Printf("🔍 Reward TX Output - Address: %x (40 chars: %t)", block.Txs[0].Outputs[0].Address, len(hex.EncodeToString(block.Txs[0].Outputs[0].Address[:])) == 40)
-		log.Printf("🔍 Reward TX Output - Amount: %d", block.Txs[0].Outputs[0].Amount)
+		core.LogDebug("Reward TX Output - Address: %x (40 chars: %t)", block.Txs[0].Outputs[0].Address, len(hex.EncodeToString(block.Txs[0].Outputs[0].Address[:])) == 40)
+		core.LogDebug("Reward TX Output - Amount: %d", block.Txs[0].Outputs[0].Amount)
 	}
 	if block == nil {
 		return &RPCResponse{
@@ -738,7 +742,7 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 		}
 	}
 
-	log.Printf("🔧 Creating template for block #%d with parent hash: %x", block.Header.Number, block.Header.ParentHash)
+	core.LogDebug("Creating template for block #%d with parent hash: %x", block.Header.Number, block.Header.ParentHash)
 
 	// Serialize transactions properly for JSON response
 	txList := make([]interface{}, 0, len(block.Txs))
@@ -794,7 +798,7 @@ func (s *ServerV2) handleCreateBlockTemplateV2(req *RPCRequest) *RPCResponse {
 func (s *ServerV2) handleSubmitBlockV2(req *RPCRequest) (response *RPCResponse) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("❌ PANIC in handleSubmitBlockV2: %v", r)
+			core.LogError("PANIC in handleSubmitBlockV2: %v", r)
 			response = &RPCResponse{
 				JSONRPC: "2.0",
 				Error: &RPCError{
@@ -835,7 +839,7 @@ func (s *ServerV2) handleSubmitBlockV2(req *RPCRequest) (response *RPCResponse) 
 	// Parse block data
 	block, err := s.parseBlockData(blockData)
 	if err != nil {
-		log.Printf("❌ Failed to parse block data: %v", err)
+		core.LogError("Failed to parse block data: %v", err)
 		return &RPCResponse{
 			JSONRPC: "2.0",
 			Error: &RPCError{
@@ -849,7 +853,7 @@ func (s *ServerV2) handleSubmitBlockV2(req *RPCRequest) (response *RPCResponse) 
 
 	// Submit block to blockchain using V2 function
 	if err := s.blockchain.AddBlockV2(block); err != nil {
-		log.Printf("❌ Failed to add block: %v", err)
+		core.LogError("Failed to add block: %v", err)
 		return &RPCResponse{
 			JSONRPC: "2.0",
 			Error: &RPCError{
@@ -861,7 +865,7 @@ func (s *ServerV2) handleSubmitBlockV2(req *RPCRequest) (response *RPCResponse) 
 		}
 	}
 
-	log.Printf("✅ Block #%d submitted successfully: %x", block.Header.Number, block.Hash)
+	core.LogInfo("Block #%d submitted successfully: %x", block.Header.Number, block.Hash)
 
 	return &RPCResponse{
 		JSONRPC: "2.0",
@@ -924,9 +928,9 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 
 	// Parse transactions from block data
 	var transactions []core.Transaction
-	log.Printf("🔍 DEBUG: Parsing block data, checking for transactions...")
+	core.LogDebug("Parsing block data, checking for transactions...")
 	if txsData, ok := data["transactions"].([]interface{}); ok {
-		log.Printf("🔍 DEBUG: Found %d transactions in block data", len(txsData))
+		core.LogDebug("Found %d transactions in block data", len(txsData))
 		for _, txData := range txsData {
 			if txMap, ok := txData.(map[string]interface{}); ok {
 				// Parse transaction from map
@@ -1059,14 +1063,14 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 				}
 
 				transactions = append(transactions, tx)
-				log.Printf("💰 Parsed transaction with %d outputs, total amount: %d, hash: %x", len(tx.Outputs), tx.Amount, tx.Hash)
+				core.LogDebug("Parsed transaction with %d outputs, total amount: %d, hash: %x", len(tx.Outputs), tx.Amount, tx.Hash)
 			}
 		}
 	} else {
-		log.Printf("⚠️ DEBUG: No transactions found in block data!")
+		core.LogWarn("DEBUG: No transactions found in block data!")
 	}
 
-	log.Printf("🔍 DEBUG: Total transactions parsed: %d", len(transactions))
+	core.LogDebug("Total transactions parsed: %d", len(transactions))
 
 	// Parse merkle root
 	var merkleRoot core.Hash
@@ -1178,7 +1182,7 @@ func (s *ServerV2) handleGetBalance(req *RPCRequest) *RPCResponse {
 	balance := s.blockchain.GetBalance(address)
 
 	// Debug logging
-	log.Printf("🔍 Balance query - Address: %s, Parsed: %s, Balance: %d", addressStr, hex.EncodeToString(address[:]), balance)
+	core.LogDebug("Balance query - Address: %s, Parsed: %s, Balance: %d", addressStr, hex.EncodeToString(address[:]), balance)
 
 	return &RPCResponse{
 		JSONRPC: "2.0",
@@ -1237,7 +1241,7 @@ func (s *ServerV2) handleSendTransaction(req *RPCRequest) *RPCResponse {
 		}
 	}
 
-	log.Printf("📤 Transaction created - From: %s, To: %s, Amount: %d, Hash: %x", fromStr, toStr, tx.Amount, tx.Hash)
+	core.LogInfo("Transaction created - From: %s, To: %s, Amount: %d, Hash: %x", fromStr, toStr, tx.Amount, tx.Hash)
 
 	// Add to mempool
 	s.blockchain.GetMempool().AddTransaction(tx)
