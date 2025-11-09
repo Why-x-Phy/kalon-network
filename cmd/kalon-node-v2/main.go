@@ -114,23 +114,7 @@ func (n *NodeV2) Start() error {
 	}
 	log.Printf("✅ Blockchain initialized with height: %d", n.blockchain.GetHeight())
 
-	// Create RPC server
-	n.rpcServer = rpc.NewServerV2(n.config.RPCAddr, n.blockchain)
-
-	// Configure HTTPS if provided
-	if n.config.HTTPSAddr != "" && n.config.CertFile != "" && n.config.KeyFile != "" {
-		n.rpcServer.SetHTTPS(n.config.HTTPSAddr, n.config.CertFile, n.config.KeyFile)
-		log.Printf("🔒 HTTPS RPC configured: %s (cert: %s, key: %s)", n.config.HTTPSAddr, n.config.CertFile, n.config.KeyFile)
-	}
-
-	// Start RPC server
-	go func() {
-		if err := n.rpcServer.Start(); err != nil {
-			log.Printf("ÔØî RPC Server error: %v", err)
-		}
-	}()
-
-	// Initialize P2P network
+	// Initialize P2P network first (before RPC server)
 	p2pConfig := &network.P2PConfig{
 		ListenAddr:   n.config.P2PAddr,
 		SeedNodes:    []string{}, // TODO: Add seed nodes
@@ -141,6 +125,27 @@ func (n *NodeV2) Start() error {
 		KeepAlive:    60 * time.Second,
 	}
 	n.p2p = network.NewP2P(p2pConfig)
+
+	// Create RPC server
+	n.rpcServer = rpc.NewServerV2(n.config.RPCAddr, n.blockchain)
+
+	// Set P2P network in RPC server for peer count queries
+	if n.p2p != nil {
+		n.rpcServer.SetP2PNetwork(n.p2p)
+	}
+
+	// Configure HTTPS if provided
+	if n.config.HTTPSAddr != "" && n.config.CertFile != "" && n.config.KeyFile != "" {
+		n.rpcServer.SetHTTPS(n.config.HTTPSAddr, n.config.CertFile, n.config.KeyFile)
+		log.Printf("🔒 HTTPS RPC configured: %s (cert: %s, key: %s)", n.config.HTTPSAddr, n.config.CertFile, n.config.KeyFile)
+	}
+
+	// Start RPC server
+	go func() {
+		if err := n.rpcServer.Start(); err != nil {
+			log.Printf("⚠️ RPC Server error: %v", err)
+		}
+	}()
 
 	// Start P2P server
 	if err := n.p2p.Start(); err != nil {

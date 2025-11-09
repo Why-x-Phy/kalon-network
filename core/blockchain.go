@@ -803,6 +803,69 @@ func (bc *BlockchainV2) GetBlockByNumber(number uint64) (*Block, error) {
 	return nil, fmt.Errorf("block %d not found", number)
 }
 
+// GetTotalTransactions returns the total number of transactions in all blocks
+func (bc *BlockchainV2) GetTotalTransactions() uint64 {
+	bc.mu.RLock()
+	defer bc.mu.RUnlock()
+
+	total := uint64(0)
+	for _, block := range bc.blocks {
+		total += uint64(len(block.Txs))
+	}
+	return total
+}
+
+// GetAddressCount returns the number of unique addresses with UTXOs
+func (bc *BlockchainV2) GetAddressCount() uint64 {
+	bc.mu.RLock()
+	defer bc.mu.RUnlock()
+
+	addresses := make(map[Address]bool)
+	for _, block := range bc.blocks {
+		for _, tx := range block.Txs {
+			for _, output := range tx.Outputs {
+				addresses[output.Address] = true
+			}
+		}
+	}
+	return uint64(len(addresses))
+}
+
+// GetTreasuryBalance returns the balance of the treasury address
+func (bc *BlockchainV2) GetTreasuryBalance() uint64 {
+	if bc.genesis.TreasuryAddress == "" {
+		return 0
+	}
+	treasuryAddr := AddressFromString(bc.genesis.TreasuryAddress)
+	return bc.GetBalance(treasuryAddr)
+}
+
+// GetAddressTransactions returns all transactions for a given address
+func (bc *BlockchainV2) GetAddressTransactions(address Address) []*Transaction {
+	bc.mu.RLock()
+	defer bc.mu.RUnlock()
+
+	var transactions []*Transaction
+	for _, block := range bc.blocks {
+		for i := range block.Txs {
+			tx := &block.Txs[i]
+			// Check if address is involved in transaction (from, to, or in outputs)
+			if tx.From == address || tx.To == address {
+				transactions = append(transactions, tx)
+			} else {
+				// Check outputs
+				for _, output := range tx.Outputs {
+					if output.Address == address {
+						transactions = append(transactions, tx)
+						break
+					}
+				}
+			}
+		}
+	}
+	return transactions
+}
+
 // GetHeight returns the current height thread-safely
 func (bc *BlockchainV2) GetHeight() uint64 {
 	bc.mu.RLock()

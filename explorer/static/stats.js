@@ -86,17 +86,28 @@ async function loadStats() {
     try {
         const height = await callRPC('getHeight');
         const miningInfo = await callRPC('getMiningInfo');
+        const peerCount = await callRPC('getPeerCount').catch(() => 0);
+        const totalTxs = await callRPC('getTotalTransactions').catch(() => 0);
+        const pendingTxs = await callRPC('getPendingTransactions').catch(() => ({ count: 0 }));
+        const addressCount = await callRPC('getAddressCount').catch(() => 0);
+        const hashrate = await callRPC('getHashrate').catch(() => ({ hashrate: 0 }));
+        const treasuryBalance = await callRPC('getTreasuryBalance').catch(() => 0);
         
         // Update all stat values
         document.getElementById('statHeight').textContent = height || 0;
         document.getElementById('statTotalBlocks').textContent = height || 0;
         document.getElementById('statDifficulty').textContent = formatNumber(miningInfo?.difficulty || 0);
-        document.getElementById('statPeers').textContent = '0'; // TODO: Get from RPC
-        document.getElementById('statTotalTxs').textContent = '0'; // TODO: Get from RPC
-        document.getElementById('statPendingTxs').textContent = '0'; // TODO: Get from RPC
-        document.getElementById('statAddresses').textContent = '0'; // TODO: Get from RPC
-        document.getElementById('statHashrate').textContent = formatHashrate(0); // TODO: Calculate
-        document.getElementById('treasuryBalance').textContent = formatBalance(0); // TODO: Get from RPC
+        document.getElementById('statPeers').textContent = peerCount || 0;
+        document.getElementById('statTotalTxs').textContent = formatNumber(totalTxs || 0);
+        document.getElementById('statPendingTxs').textContent = formatNumber(pendingTxs?.count || 0);
+        if (document.getElementById('statAddresses')) {
+            document.getElementById('statAddresses').textContent = formatNumber(addressCount || 0);
+        }
+        const hashrateValue = hashrate?.hashrate || 0;
+        document.getElementById('statHashrate').textContent = formatHashrate(hashrateValue);
+        if (document.getElementById('treasuryBalance')) {
+            document.getElementById('treasuryBalance').textContent = formatBalance(treasuryBalance || 0);
+        }
         
     } catch (error) {
         console.error('Error loading stats:', error);

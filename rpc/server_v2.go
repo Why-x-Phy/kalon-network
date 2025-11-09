@@ -45,6 +45,7 @@ type ServerV2 struct {
 	certFile    string // SSL certificate file path
 	keyFile     string // SSL private key file path
 	blockchain  *core.BlockchainV2
+	p2pNetwork  interface{ GetPeerCount() int } // Interface for P2P network (optional)
 	mu          sync.RWMutex
 	connections map[string]*Connection
 	eventBus    *core.EventBus
@@ -81,6 +82,7 @@ func NewServerV2(addr string, blockchain *core.BlockchainV2) *ServerV2 {
 	server := &ServerV2{
 		addr:        addr,
 		blockchain:  blockchain,
+		p2pNetwork:  nil, // Will be set via SetP2PNetwork if needed
 		connections: make(map[string]*Connection),
 		eventBus:    blockchain.GetEventBus(),
 		ctx:         ctx,
@@ -95,6 +97,13 @@ func NewServerV2(addr string, blockchain *core.BlockchainV2) *ServerV2 {
 	go server.cleanupConnections()
 
 	return server
+}
+
+// SetP2PNetwork sets the P2P network for peer count queries
+func (s *ServerV2) SetP2PNetwork(p2p interface{ GetPeerCount() int }) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.p2pNetwork = p2p
 }
 
 // SetHTTPS configures HTTPS for the RPC server
@@ -347,6 +356,22 @@ func (s *ServerV2) handleRPCMethod(req *RPCRequest) *RPCResponse {
 		return s.handleRestoreSnapshot(req)
 	case "getSnapshot":
 		return s.handleGetSnapshot(req)
+	case "getPeerCount":
+		return s.handleGetPeerCount(req)
+	case "getTotalTransactions":
+		return s.handleGetTotalTransactions(req)
+	case "getPendingTransactions":
+		return s.handleGetPendingTransactions(req)
+	case "getAddressCount":
+		return s.handleGetAddressCount(req)
+	case "getTreasuryBalance":
+		return s.handleGetTreasuryBalance(req)
+	case "getHashrate":
+		return s.handleGetHashrate(req)
+	case "getAddressInfo":
+		return s.handleGetAddressInfo(req)
+	case "getAddressTransactions":
+		return s.handleGetAddressTransactions(req)
 	default:
 		return &RPCResponse{
 			JSONRPC: "2.0",
@@ -1330,6 +1355,249 @@ func (s *ServerV2) extractIP(r *http.Request) string {
 		ip = strings.Split(r.RemoteAddr, ":")[0]
 	}
 	return ip
+}
+
+// handleGetPeerCount handles getPeerCount requests
+func (s *ServerV2) handleGetPeerCount(req *RPCRequest) *RPCResponse {
+	s.mu.RLock()
+	p2p := s.p2pNetwork
+	s.mu.RUnlock()
+
+	if p2p != nil {
+		count := p2p.GetPeerCount()
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Result:  count,
+			ID:      req.ID,
+		}
+	}
+
+	// Return 0 if P2P network not available
+	return &RPCResponse{
+		JSONRPC: "2.0",
+		Result:  0,
+		ID:      req.ID,
+	}
+}
+
+// handleGetTotalTransactions handles getTotalTransactions requests
+func (s *ServerV2) handleGetTotalTransactions(req *RPCRequest) *RPCResponse {
+	total := s.blockchain.GetTotalTransactions()
+	return &RPCResponse{
+		JSONRPC: "2.0",
+		Result:  total,
+		ID:      req.ID,
+	}
+}
+
+// handleGetPendingTransactions handles getPendingTransactions requests
+func (s *ServerV2) handleGetPendingTransactions(req *RPCRequest) *RPCResponse {
+	pendingTxs := s.blockchain.GetMempool().GetPendingTransactions()
+	return &RPCResponse{
+		JSONRPC: "2.0",
+		Result: map[string]interface{}{
+			"count":        len(pendingTxs),
+			"transactions": pendingTxs,
+		},
+		ID: req.ID,
+	}
+}
+
+// handleGetAddressCount handles getAddressCount requests
+func (s *ServerV2) handleGetAddressCount(req *RPCRequest) *RPCResponse {
+	count := s.blockchain.GetAddressCount()
+	return &RPCResponse{
+		JSONRPC: "2.0",
+		Result:  count,
+		ID:      req.ID,
+	}
+}
+
+// handleGetTreasuryBalance handles getTreasuryBalance requests
+func (s *ServerV2) handleGetTreasuryBalance(req *RPCRequest) *RPCResponse {
+	balance := s.blockchain.GetTreasuryBalance()
+	return &RPCResponse{
+		JSONRPC: "2.0",
+		Result:  balance,
+		ID:      req.ID,
+	}
+}
+
+// handleGetHashrate handles getHashrate requests
+func (s *ServerV2) handleGetHashrate(req *RPCRequest) *RPCResponse {
+	bestBlock := s.blockchain.GetBestBlock()
+	if bestBlock == nil {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Result: map[string]interface{}{
+				"hashrate":   0.0,
+				"difficulty": 0,
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Calculate hashrate from difficulty
+	// Hashrate = 2^(64-difficulty) / blockTime
+	difficulty := bestBlock.Header.Difficulty
+	blockTime := 15.0 // Target block time in seconds (from genesis config)
+
+	// Calculate hashrate: 2^(64-difficulty) / blockTime
+	// For simplicity, we use a simplified formula
+	// Note: difficulty is uint64, so we need to handle overflow
+	var hashrate float64
+	if difficulty < 64 {
+		hashrate = float64(uint64(1)<<(64-difficulty)) / blockTime
+	} else {
+		// For very high difficulty, use a simplified calculation
+		hashrate = float64(1) / blockTime
+	}
+
+	return &RPCResponse{
+		JSONRPC: "2.0",
+		Result: map[string]interface{}{
+			"hashrate":   hashrate,
+			"difficulty": difficulty,
+		},
+		ID: req.ID,
+	}
+}
+
+// handleGetAddressInfo handles getAddressInfo requests
+func (s *ServerV2) handleGetAddressInfo(req *RPCRequest) *RPCResponse {
+	// Parse parameters
+	params, ok := req.Params.(map[string]interface{})
+	if !ok {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid params",
+				Data:    "Expected object with 'address' field",
+			},
+			ID: req.ID,
+		}
+	}
+
+	addressStr, ok := params["address"].(string)
+	if !ok {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid params",
+				Data:    "Missing or invalid 'address' field",
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Convert string address to Address type
+	address := core.AddressFromString(addressStr)
+
+	// Get balance
+	balance := s.blockchain.GetBalance(address)
+
+	// Get transactions
+	transactions := s.blockchain.GetAddressTransactions(address)
+
+	// Count sent and received
+	sentCount := uint64(0)
+	receivedCount := uint64(0)
+	totalSent := uint64(0)
+	totalReceived := uint64(0)
+
+	for _, tx := range transactions {
+		if tx.From == address {
+			sentCount++
+			totalSent += tx.Amount + tx.Fee
+		}
+		if tx.To == address {
+			receivedCount++
+			totalReceived += tx.Amount
+		}
+		// Also check outputs
+		for _, output := range tx.Outputs {
+			if output.Address == address {
+				receivedCount++
+				totalReceived += output.Amount
+			}
+		}
+	}
+
+	return &RPCResponse{
+		JSONRPC: "2.0",
+		Result: map[string]interface{}{
+			"address":          addressStr,
+			"balance":          balance,
+			"transactionCount": len(transactions),
+			"sentCount":        sentCount,
+			"receivedCount":    receivedCount,
+			"totalSent":        totalSent,
+			"totalReceived":    totalReceived,
+		},
+		ID: req.ID,
+	}
+}
+
+// handleGetAddressTransactions handles getAddressTransactions requests
+func (s *ServerV2) handleGetAddressTransactions(req *RPCRequest) *RPCResponse {
+	// Parse parameters
+	params, ok := req.Params.(map[string]interface{})
+	if !ok {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid params",
+				Data:    "Expected object with 'address' field",
+			},
+			ID: req.ID,
+		}
+	}
+
+	addressStr, ok := params["address"].(string)
+	if !ok {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid params",
+				Data:    "Missing or invalid 'address' field",
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Convert string address to Address type
+	address := core.AddressFromString(addressStr)
+
+	// Get transactions
+	transactions := s.blockchain.GetAddressTransactions(address)
+
+	// Convert to JSON-compatible format
+	txList := make([]map[string]interface{}, 0, len(transactions))
+	for _, tx := range transactions {
+		txMap := map[string]interface{}{
+			"hash":      hex.EncodeToString(tx.Hash[:]),
+			"from":      hex.EncodeToString(tx.From[:]),
+			"to":        hex.EncodeToString(tx.To[:]),
+			"amount":    tx.Amount,
+			"fee":       tx.Fee,
+			"timestamp": tx.Timestamp.Unix(),
+		}
+		txList = append(txList, txMap)
+	}
+
+	return &RPCResponse{
+		JSONRPC: "2.0",
+		Result: map[string]interface{}{
+			"address":      addressStr,
+			"count":        len(transactions),
+			"transactions": txList,
+		},
+		ID: req.ID,
+	}
 }
 
 // checkRateLimit checks if the request rate is within limits

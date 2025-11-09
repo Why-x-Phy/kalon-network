@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wallet - Kalon Explorer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="logo">
+                <h1><a href="index.html" style="text-decoration: none; color: inherit;">Kalon Explorer</a></h1>
+            </div>
+            <div class="header-right">
+                <div id="onlineStatus" class="status-offline">● OFFLINE</div>
+                <div class="search">
+                    <input type="text" placeholder="Search blocks, transactions or wallet addresses" id="searchInput">
+                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Wallet Info -->
+    <section class="content">
+        <div class="container">
+            <h2 class="section-title">Wallet Information</h2>
+            
+            <div id="walletInfo" style="margin-bottom: 30px;">
+                <div class="stat-card" style="margin-bottom: 20px;">
+                    <div class="stat-label">ADDRESS</div>
+                    <div class="stat-value" id="walletAddress" style="font-size: 0.9em; word-break: break-all;">Loading...</div>
+                </div>
+                
+                <div class="stats-grid" style="margin-bottom: 30px;">
+                    <div class="stat-card">
+                        <div class="stat-label">BALANCE</div>
+                        <div class="stat-value" id="walletBalance">Loading...</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">TOTAL TRANSACTIONS</div>
+                        <div class="stat-value" id="walletTxCount">Loading...</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">SENT</div>
+                        <div class="stat-value" id="walletSentCount">Loading...</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">RECEIVED</div>
+                        <div class="stat-value" id="walletReceivedCount">Loading...</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">TOTAL SENT</div>
+                        <div class="stat-value" id="walletTotalSent">Loading...</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">TOTAL RECEIVED</div>
+                        <div class="stat-value" id="walletTotalReceived">Loading...</div>
+                    </div>
+                </div>
+            </div>
+
+            <h2 class="section-title">Transactions</h2>
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Hash</th>
+                            <th>From</th>
+                            <th>To</th>
+                            <th>Amount</th>
+                            <th>Fee</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transactionsTable">
+                        <tr>
+                            <td colspan="6" style="text-align: center; padding: 40px;">
+                                <div class="loading">Loading transactions...</div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <script src="config.js"></script>
+    <script src="wallet.js"></script>
+</body>
+</html>
+

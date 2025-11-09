@@ -103,15 +103,20 @@ async function loadNetworkStats() {
     try {
         const height = await callRPC('getHeight');
         const miningInfo = await callRPC('getMiningInfo');
+        const peerCount = await callRPC('getPeerCount').catch(() => 0);
+        const totalTxs = await callRPC('getTotalTransactions').catch(() => 0);
+        const pendingTxs = await callRPC('getPendingTransactions').catch(() => ({ count: 0 }));
+        const hashrate = await callRPC('getHashrate').catch(() => ({ hashrate: 0 }));
         
         // Update stats
         document.getElementById('statHeight').textContent = height || 0;
         document.getElementById('statTotalBlocks').textContent = height || 0;
         document.getElementById('statDifficulty').textContent = formatNumber(miningInfo?.difficulty || 0);
-        document.getElementById('statPeers').textContent = '0'; // TODO: Get from RPC
-        document.getElementById('statTotalTxs').textContent = '0'; // TODO: Get from RPC
-        document.getElementById('statPendingTxs').textContent = '0'; // TODO: Get from RPC
-        document.getElementById('statHashrate').textContent = '0 H/s'; // TODO: Calculate from difficulty
+        document.getElementById('statPeers').textContent = peerCount || 0;
+        document.getElementById('statTotalTxs').textContent = formatNumber(totalTxs || 0);
+        document.getElementById('statPendingTxs').textContent = formatNumber(pendingTxs?.count || 0);
+        const hashrateValue = hashrate?.hashrate || 0;
+        document.getElementById('statHashrate').textContent = formatHashrate(hashrateValue);
         
     } catch (error) {
         console.error('Error loading network stats:', error);
@@ -212,5 +217,49 @@ function formatNumber(num) {
     return num.toLocaleString();
 }
 
+// Setup search functionality
+function setupSearch() {
+    const searchInput = document.querySelector('.search input');
+    if (!searchInput) return;
+    
+    searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            const query = searchInput.value.trim();
+            if (query) {
+                handleSearch(query);
+            }
+        }
+    });
+    
+    // Also handle search icon click
+    const searchIcon = document.querySelector('.search-icon');
+    if (searchIcon) {
+        searchIcon.parentElement.addEventListener('click', () => {
+            const query = searchInput.value.trim();
+            if (query) {
+                handleSearch(query);
+            }
+        });
+    }
+}
+
+// Handle search query
+async function handleSearch(query) {
+    // Check if it's a wallet address (starts with kalon1 or tkalon1 or is hex)
+    if (query.startsWith('kalon1') || query.startsWith('tkalon1') || /^[0-9a-fA-F]{40,}$/.test(query)) {
+        // Redirect to wallet page
+        window.location.href = `wallet.html?address=${encodeURIComponent(query)}`;
+    } else if (/^[0-9a-fA-F]{64}$/i.test(query) || query.startsWith('0x')) {
+        // Block or transaction hash
+        window.location.href = `block.html?h=${encodeURIComponent(query)}`;
+    } else if (/^\d+$/.test(query)) {
+        // Block number
+        window.location.href = `block.html?n=${query}`;
+    } else {
+        alert('Ungültige Suche. Bitte geben Sie eine Wallet-Adresse, Block-Hash oder Block-Nummer ein.');
+    }
+}
+
 // Initialize on page load
 init();
+setupSearch();
