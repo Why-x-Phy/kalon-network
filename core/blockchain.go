@@ -23,6 +23,10 @@ type BlockchainV2 struct {
 	mempool         *Mempool
 	storage         BlockPersister // Interface for persistent storage
 	SnapshotManager *SnapshotManager
+	// Fork detection: Map of parent hash -> list of blocks with same parent (forks)
+	forkBlocks map[string][]*Block // Key: hex-encoded parent hash
+	// Block index: Map of block hash -> block for quick lookup
+	blockIndex map[string]*Block // Key: hex-encoded block hash
 }
 
 // BlockPersister defines the interface for persisting blocks
@@ -83,6 +87,8 @@ func NewBlockchainV2(genesis *GenesisConfig, persister BlockPersister) *Blockcha
 		mempool:         NewMempool(),
 		storage:         persister,
 		SnapshotManager: NewSnapshotManager(),
+		forkBlocks:      make(map[string][]*Block),
+		blockIndex:      make(map[string]*Block),
 	}
 
 	// Try to load existing chain from storage
@@ -172,18 +178,130 @@ func (bc *BlockchainV2) createGenesisBlockV2() *Block {
 	return genesisBlock
 }
 
-// addBlockV2 adds a block atomically
+// addBlockV2 adds a block atomically with fork detection and reorganization
 func (bc *BlockchainV2) addBlockV2(block *Block) error {
 	// CRITICAL: Hold lock only for in-memory operations
 	// Storage operations happen AFTER lock release to prevent blocking read operations
 	bc.mu.Lock()
 
-	// Validate block
-	if err := bc.validateBlockV2(block); err != nil {
+	// Check if block already exists (duplicate)
+	blockHashKey := hex.EncodeToString(block.Hash[:])
+	if existingBlock := bc.blockIndex[blockHashKey]; existingBlock != nil {
+		log.Printf("⚠️ Block #%d already exists: %x", block.Header.Number, block.Hash)
+		bc.mu.Unlock()
+		return fmt.Errorf("block already exists")
+	}
+
+	// Fork detection: Check BEFORE validation if this could be a fork
+	isFork := false
+	var parentBlock *Block = nil
+
+	if bc.bestBlock != nil {
+		if block.Header.Number == bc.bestBlock.Header.Number {
+			// Same height but different hash = fork
+			if block.Hash != bc.bestBlock.Hash {
+				isFork = true
+				log.Printf("🔀 Fork detected! Block #%d: current=%x, new=%x",
+					block.Header.Number, bc.bestBlock.Hash, block.Hash)
+				// For fork at same height, parent is the same as bestBlock's parent
+				if bc.bestBlock.Header.Number > 0 {
+					parentHash := bc.bestBlock.Header.ParentHash
+					parentBlock = bc.getBlockByHash(parentHash)
+					if parentBlock == nil && bc.storage != nil {
+						parentBlock, _ = bc.storage.GetBlockByHash(parentHash[:])
+					}
+				}
+			}
+		} else if block.Header.ParentHash == bc.bestBlock.Hash {
+			// Normal case: block extends bestBlock
+			isFork = false
+			parentBlock = bc.bestBlock
+		} else if block.Header.ParentHash != bc.bestBlock.Hash {
+			// Different parent - could be a fork
+			// Try to find parent block in index or storage
+			parentHash := block.Header.ParentHash
+			parentBlock = bc.getBlockByHash(parentHash)
+			if parentBlock == nil && bc.storage != nil {
+				parentBlock, _ = bc.storage.GetBlockByHash(parentHash[:])
+			}
+
+			if parentBlock != nil {
+				// Parent exists - check if it's a fork
+				parentHashKey := hex.EncodeToString(parentHash[:])
+				if forkBlocks, exists := bc.forkBlocks[parentHashKey]; exists && len(forkBlocks) > 0 {
+					// Parent is a fork block
+					isFork = true
+					log.Printf("🔀 Fork detected! Block #%d extends fork chain", block.Header.Number)
+				} else if parentBlock.Hash != bc.bestBlock.Hash {
+					// Parent is different from bestBlock - this is a fork
+					isFork = true
+					log.Printf("🔀 Fork detected! Block #%d has different parent: %x (bestBlock: %x)",
+						block.Header.Number, parentHash, bc.bestBlock.Hash)
+				}
+			} else {
+				// Parent not found - this is invalid (orphan block)
+				bc.mu.Unlock()
+				return fmt.Errorf("parent block not found: %x", parentHash)
+			}
+		}
+	}
+
+	// Validate block (with parent block if fork detected)
+	if err := bc.validateBlockV2WithParent(block, parentBlock); err != nil {
 		bc.mu.Unlock()
 		return fmt.Errorf("block validation failed: %v", err)
 	}
 
+	// Store block in index
+	bc.blockIndex[blockHashKey] = block
+
+	// If fork detected, store in fork blocks and check chain lengths
+	if isFork {
+		parentHashKey := hex.EncodeToString(block.Header.ParentHash[:])
+		bc.forkBlocks[parentHashKey] = append(bc.forkBlocks[parentHashKey], block)
+
+		// Calculate chain lengths
+		currentChainLength := bc.calculateChainLength(bc.bestBlock)
+		newChainLength := bc.calculateChainLength(block)
+
+		log.Printf("📊 Chain lengths - Current: %d, New: %d", currentChainLength, newChainLength)
+
+		// Longest chain rule: if new chain is longer, reorganize
+		if newChainLength > currentChainLength {
+			log.Printf("🔄 Reorganizing chain: new chain is longer (%d > %d)",
+				newChainLength, currentChainLength)
+
+			// Release lock before reorganization (it will re-acquire)
+			bc.mu.Unlock()
+
+			// Perform reorganization
+			if err := bc.reorganizeChain(block); err != nil {
+				return fmt.Errorf("reorganization failed: %v", err)
+			}
+
+			// Reorganization successful - block is now part of best chain
+			// Block is already added in reorganizeChain, so we're done
+
+			// Save to persistent storage
+			if bc.storage != nil {
+				if err := bc.storage.StoreBlock(block); err != nil {
+					log.Printf("⚠️ Failed to save block to storage: %v", err)
+				} else {
+					log.Printf("✅ Block #%d saved to storage", block.Header.Number)
+				}
+			}
+
+			return nil
+		} else {
+			// New chain is shorter or equal - keep current chain
+			log.Printf("✅ Keeping current chain (length %d >= %d)",
+				currentChainLength, newChainLength)
+			bc.mu.Unlock()
+			return nil
+		}
+	}
+
+	// Normal case: add block to chain
 	// Process UTXOs for all transactions in the block
 	for _, tx := range block.Txs {
 		bc.processTransactionUTXOs(&tx, block.Hash)
@@ -319,8 +437,13 @@ func (bc *BlockchainV2) GetMempool() *Mempool {
 	return bc.mempool
 }
 
-// validateBlockV2 validates a block professionally
+// validateBlockV2 validates a block professionally (uses bestBlock as parent)
 func (bc *BlockchainV2) validateBlockV2(block *Block) error {
+	return bc.validateBlockV2WithParent(block, bc.bestBlock)
+}
+
+// validateBlockV2WithParent validates a block with a specific parent block
+func (bc *BlockchainV2) validateBlockV2WithParent(block *Block, parent *Block) error {
 	// Check if it's genesis block
 	if block.Header.Number == 0 {
 		// For genesis block, validate merkle root if there are transactions
@@ -335,9 +458,16 @@ func (bc *BlockchainV2) validateBlockV2(block *Block) error {
 	}
 
 	// Get parent block
-	parent := bc.bestBlock
 	if parent == nil {
-		return fmt.Errorf("no parent block found")
+		// Try to get parent from block index or storage
+		parentHash := block.Header.ParentHash
+		parent = bc.getBlockByHash(parentHash)
+		if parent == nil && bc.storage != nil {
+			parent, _ = bc.storage.GetBlockByHash(parentHash[:])
+		}
+		if parent == nil {
+			return fmt.Errorf("no parent block found: %x", parentHash)
+		}
 	}
 
 	// Validate parent hash
@@ -380,6 +510,245 @@ func (bc *BlockchainV2) GetBestBlock() *Block {
 	bc.mu.RLock()
 	defer bc.mu.RUnlock()
 	return bc.bestBlock
+}
+
+// getBlockByHash returns a block by hash from the block index
+func (bc *BlockchainV2) getBlockByHash(hash Hash) *Block {
+	hashKey := hex.EncodeToString(hash[:])
+	return bc.blockIndex[hashKey]
+}
+
+// calculateChainLength calculates the chain length from a block to genesis
+func (bc *BlockchainV2) calculateChainLength(block *Block) uint64 {
+	if block == nil {
+		return 0
+	}
+
+	length := uint64(1) // Count this block
+	current := block
+
+	// Traverse back to genesis
+	for current.Header.Number > 0 {
+		parentHash := current.Header.ParentHash
+		parent := bc.getBlockByHash(parentHash)
+		if parent == nil {
+			// Try to get from storage if available
+			if bc.storage != nil {
+				parent, _ = bc.storage.GetBlockByHash(parentHash[:])
+			}
+			if parent == nil {
+				break
+			}
+		}
+		length++
+		current = parent
+	}
+
+	return length
+}
+
+// findCommonParent finds the common parent block between two chains
+func (bc *BlockchainV2) findCommonParent(block1, block2 *Block) *Block {
+	if block1 == nil || block2 == nil {
+		return nil
+	}
+
+	// Build chain hashes for block1
+	chain1Hashes := make(map[string]bool)
+	current := block1
+	for current != nil {
+		hashKey := hex.EncodeToString(current.Hash[:])
+		chain1Hashes[hashKey] = true
+
+		if current.Header.Number == 0 {
+			break
+		}
+		parentHash := current.Header.ParentHash
+		current = bc.getBlockByHash(parentHash)
+		if current == nil && bc.storage != nil {
+			current, _ = bc.storage.GetBlockByHash(parentHash[:])
+		}
+		if current == nil {
+			break
+		}
+	}
+
+	// Traverse block2 chain to find common parent
+	current = block2
+	for current != nil {
+		hashKey := hex.EncodeToString(current.Hash[:])
+		if chain1Hashes[hashKey] {
+			return current
+		}
+
+		if current.Header.Number == 0 {
+			break
+		}
+		parentHash := current.Header.ParentHash
+		current = bc.getBlockByHash(parentHash)
+		if current == nil && bc.storage != nil {
+			current, _ = bc.storage.GetBlockByHash(parentHash[:])
+		}
+		if current == nil {
+			break
+		}
+	}
+
+	return nil
+}
+
+// reorganizeChain performs chain reorganization when a longer fork is detected
+func (bc *BlockchainV2) reorganizeChain(newBestBlock *Block) error {
+	bc.mu.Lock()
+	defer bc.mu.Unlock()
+
+	if bc.bestBlock == nil {
+		return fmt.Errorf("no current best block to reorganize from")
+	}
+
+	log.Printf("🔄 Starting chain reorganization...")
+	log.Printf("   Current best: Block #%d (%x)", bc.bestBlock.Header.Number, bc.bestBlock.Hash)
+	log.Printf("   New best: Block #%d (%x)", newBestBlock.Header.Number, newBestBlock.Hash)
+
+	// Find common parent
+	commonParent := bc.findCommonParent(bc.bestBlock, newBestBlock)
+	if commonParent == nil {
+		return fmt.Errorf("no common parent found between chains")
+	}
+
+	log.Printf("   Common parent: Block #%d (%x)", commonParent.Header.Number, commonParent.Hash)
+
+	// Build list of blocks to remove (from current chain, after common parent)
+	blocksToRemove := make([]*Block, 0)
+	current := bc.bestBlock
+	for current != nil && current.Hash != commonParent.Hash {
+		blocksToRemove = append(blocksToRemove, current)
+		if current.Header.Number == 0 {
+			break
+		}
+		parentHash := current.Header.ParentHash
+		current = bc.getBlockByHash(parentHash)
+		if current == nil && bc.storage != nil {
+			current, _ = bc.storage.GetBlockByHash(parentHash[:])
+		}
+		if current == nil {
+			break
+		}
+	}
+
+	// Build list of blocks to add (from new chain, after common parent)
+	blocksToAdd := make([]*Block, 0)
+	current = newBestBlock
+	for current != nil && current.Hash != commonParent.Hash {
+		blocksToAdd = append(blocksToAdd, current)
+		if current.Header.Number == 0 {
+			break
+		}
+		parentHash := current.Header.ParentHash
+		current = bc.getBlockByHash(parentHash)
+		if current == nil && bc.storage != nil {
+			current, _ = bc.storage.GetBlockByHash(parentHash[:])
+		}
+		if current == nil {
+			break
+		}
+	}
+
+	// Reverse blocksToAdd to get correct order (from common parent to new best)
+	for i, j := 0, len(blocksToAdd)-1; i < j; i, j = i+1, j-1 {
+		blocksToAdd[i], blocksToAdd[j] = blocksToAdd[j], blocksToAdd[i]
+	}
+
+	log.Printf("   Blocks to remove: %d", len(blocksToRemove))
+	log.Printf("   Blocks to add: %d", len(blocksToAdd))
+
+	// Step 1: Rollback UTXOs from removed blocks (in reverse order)
+	for i := len(blocksToRemove) - 1; i >= 0; i-- {
+		block := blocksToRemove[i]
+		log.Printf("   Rolling back Block #%d (%x)", block.Header.Number, block.Hash)
+
+		// Remove UTXOs created by this block
+		bc.utxoSet.RemoveUTXOs(block.Hash)
+
+		// Re-add UTXOs that were spent by this block (rollback spending)
+		for _, tx := range block.Txs {
+			for _, input := range tx.Inputs {
+				// Find the UTXO that was spent
+				if bc.storage != nil {
+					parentTx, _ := bc.storage.GetBlockByHash(input.PreviousTxHash[:])
+					if parentTx != nil {
+						// Re-add the UTXO (mark as unspent)
+						// Note: This is simplified - in a full implementation, we'd need to track
+						// which UTXO was spent and restore it
+					}
+				}
+			}
+		}
+	}
+
+	// Step 2: Remove blocks from blocks array and update height
+	// Find the index of common parent in blocks array
+	commonParentIndex := -1
+	for i, block := range bc.blocks {
+		if block.Hash == commonParent.Hash {
+			commonParentIndex = i
+			break
+		}
+	}
+
+	if commonParentIndex >= 0 {
+		// Remove blocks after common parent
+		bc.blocks = bc.blocks[:commonParentIndex+1]
+		bc.height = commonParent.Header.Number
+	}
+
+	// Step 3: Add new blocks and process UTXOs
+	for _, block := range blocksToAdd {
+		log.Printf("   Adding Block #%d (%x)", block.Header.Number, block.Hash)
+
+		// Process UTXOs for all transactions in the block
+		for _, tx := range block.Txs {
+			bc.processTransactionUTXOs(&tx, block.Hash)
+			// Remove from mempool if it exists
+			bc.mempool.RemoveTransaction(tx.Hash)
+		}
+
+		// Add block to chain
+		bc.blocks = append(bc.blocks, block)
+		bc.height = block.Header.Number
+		bc.bestBlock = block
+
+		// Update block index
+		blockHashKey := hex.EncodeToString(block.Hash[:])
+		bc.blockIndex[blockHashKey] = block
+	}
+
+	// Update state
+	bc.stateManager.SetState("height", bc.height)
+	bc.stateManager.SetState("bestBlock", bc.bestBlock.Hash)
+
+	// Emit reorganization event
+	bc.eventBus.Emit("chainReorganized", map[string]interface{}{
+		"oldBest": bc.bestBlock,
+		"newBest": newBestBlock,
+		"removed": len(blocksToRemove),
+		"added":   len(blocksToAdd),
+	})
+
+	log.Printf("✅ Chain reorganization completed")
+	log.Printf("   New best: Block #%d (%x)", bc.bestBlock.Header.Number, bc.bestBlock.Hash)
+
+	// Save to persistent storage
+	if bc.storage != nil {
+		// Save all new blocks
+		for _, block := range blocksToAdd {
+			if err := bc.storage.StoreBlock(block); err != nil {
+				log.Printf("⚠️ Failed to save block #%d to storage: %v", block.Header.Number, err)
+			}
+		}
+	}
+
+	return nil
 }
 
 // GetRecentBlocks returns the most recent blocks
@@ -653,6 +1022,10 @@ func (bc *BlockchainV2) loadChainFromStorage() {
 			return
 		}
 		bc.blocks = append(bc.blocks, block)
+
+		// Add block to index
+		blockHashKey := hex.EncodeToString(block.Hash[:])
+		bc.blockIndex[blockHashKey] = block
 
 		// IMPORTANT: Reconstruct UTXOs for each block
 		// This is critical because UTXOs are in-memory and need to be rebuilt
