@@ -485,8 +485,14 @@ func (bc *BlockchainV2) validateBlockV2WithParent(block *Block, parent *Block) e
 		return fmt.Errorf("block timestamp before parent: %v < %v", block.Header.Timestamp, parent.Header.Timestamp)
 	}
 
-	// Validate merkle root
+	// Validate difficulty
 	consensusManager := NewConsensusManager(bc.genesis)
+	expectedDifficulty := consensusManager.CalculateDifficulty(block.Header.Number, parent)
+	if block.Header.Difficulty != expectedDifficulty {
+		return fmt.Errorf("invalid difficulty: expected %d, got %d", expectedDifficulty, block.Header.Difficulty)
+	}
+
+	// Validate merkle root
 	expectedMerkleRoot := consensusManager.CalculateMerkleRoot(block.Txs)
 	if block.Header.MerkleRoot != expectedMerkleRoot {
 		return fmt.Errorf("invalid merkle root: expected %x, got %x", expectedMerkleRoot, block.Header.MerkleRoot)
