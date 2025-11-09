@@ -474,6 +474,41 @@ func (rpc *RPCBlockchainV2) CreateNewBlock(miner core.Address, txs []core.Transa
 		}
 	}
 
+	// Calculate merkle root from transactions
+	// Note: We need to create a ConsensusManager to calculate merkle root
+	// For now, we'll calculate it directly using the same logic
+	var merkleRoot core.Hash
+	if len(blockTxs) == 0 {
+		merkleRoot = core.Hash{}
+	} else if len(blockTxs) == 1 {
+		merkleRoot = blockTxs[0].CalculateHash()
+	} else {
+		// Build merkle tree
+		hashes := make([][]byte, len(blockTxs))
+		for i, tx := range blockTxs {
+			hashes[i] = tx.CalculateHash().Bytes()
+		}
+
+		for len(hashes) > 1 {
+			var nextLevel [][]byte
+			for i := 0; i < len(hashes); i += 2 {
+				var left, right []byte
+				left = hashes[i]
+				if i+1 < len(hashes) {
+					right = hashes[i+1]
+				} else {
+					right = hashes[i] // Duplicate last element if odd number
+				}
+				// Concatenate and hash
+				combined := append(left, right...)
+				hash := sha256.Sum256(combined)
+				nextLevel = append(nextLevel, hash[:])
+			}
+			hashes = nextLevel
+		}
+		copy(merkleRoot[:], hashes[0])
+	}
+
 	// Create block with transactions from RPC server
 	block := &core.Block{
 		Header: core.BlockHeader{
@@ -483,7 +518,7 @@ func (rpc *RPCBlockchainV2) CreateNewBlock(miner core.Address, txs []core.Transa
 			Difficulty:  uint64(difficulty),
 			Miner:       miner,
 			Nonce:       0,
-			MerkleRoot:  core.Hash{},
+			MerkleRoot:  merkleRoot, // Calculate merkle root from transactions
 			TxCount:     uint32(len(blockTxs)),
 			NetworkFee:  0,
 			TreasuryFee: 0,
@@ -544,7 +579,10 @@ func (rpc *RPCBlockchainV2) AddBlock(block *core.Block) error {
 				"hash":         hex.EncodeToString(block.Hash[:]),
 				"parentHash":   hex.EncodeToString(block.Header.ParentHash[:]),
 				"timestamp":    float64(block.Header.Timestamp.Unix()),
-				"transactions": transactions, // CRITICAL: Include transactions!
+				"merkleRoot":   hex.EncodeToString(block.Header.MerkleRoot[:]), // Include merkle root
+				"txCount":      float64(block.Header.TxCount),
+				"miner":        hex.EncodeToString(block.Header.Miner[:]), // Include miner address
+				"transactions": transactions,                              // CRITICAL: Include transactions!
 			},
 		},
 		ID: 3,

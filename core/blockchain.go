@@ -144,6 +144,11 @@ func NewDifficultyAdjustment() *DifficultyAdjustment {
 func (bc *BlockchainV2) createGenesisBlockV2() *Block {
 	genesisTimestamp := time.Unix(1609459200, 0) // 2021-01-01 00:00:00 UTC
 
+	// Genesis block has no transactions, so merkle root is empty
+	genesisTxs := []Transaction{}
+	consensusManager := NewConsensusManager(bc.genesis)
+	merkleRoot := consensusManager.CalculateMerkleRoot(genesisTxs)
+
 	genesisBlock := &Block{
 		Header: BlockHeader{
 			ParentHash:  Hash{},
@@ -152,7 +157,7 @@ func (bc *BlockchainV2) createGenesisBlockV2() *Block {
 			Difficulty:  bc.genesis.Difficulty.InitialDifficulty,
 			Miner:       Address{},
 			Nonce:       0,
-			MerkleRoot:  Hash{},
+			MerkleRoot:  merkleRoot, // Calculate merkle root (empty for genesis)
 			TxCount:     0,
 			NetworkFee:  0,
 			TreasuryFee: 0,
@@ -318,6 +323,14 @@ func (bc *BlockchainV2) GetMempool() *Mempool {
 func (bc *BlockchainV2) validateBlockV2(block *Block) error {
 	// Check if it's genesis block
 	if block.Header.Number == 0 {
+		// For genesis block, validate merkle root if there are transactions
+		if len(block.Txs) > 0 {
+			consensusManager := NewConsensusManager(bc.genesis)
+			expectedMerkleRoot := consensusManager.CalculateMerkleRoot(block.Txs)
+			if block.Header.MerkleRoot != expectedMerkleRoot {
+				return fmt.Errorf("invalid merkle root in genesis block")
+			}
+		}
 		return nil
 	}
 
@@ -340,6 +353,18 @@ func (bc *BlockchainV2) validateBlockV2(block *Block) error {
 	// Validate timestamp
 	if block.Header.Timestamp.Before(parent.Header.Timestamp) {
 		return fmt.Errorf("block timestamp before parent: %v < %v", block.Header.Timestamp, parent.Header.Timestamp)
+	}
+
+	// Validate merkle root
+	consensusManager := NewConsensusManager(bc.genesis)
+	expectedMerkleRoot := consensusManager.CalculateMerkleRoot(block.Txs)
+	if block.Header.MerkleRoot != expectedMerkleRoot {
+		return fmt.Errorf("invalid merkle root: expected %x, got %x", expectedMerkleRoot, block.Header.MerkleRoot)
+	}
+
+	// Validate transaction count
+	if block.Header.TxCount != uint32(len(block.Txs)) {
+		return fmt.Errorf("invalid transaction count: expected %d, got %d", len(block.Txs), block.Header.TxCount)
 	}
 
 	// Validate proof of work
@@ -496,6 +521,9 @@ func (bc *BlockchainV2) CreateNewBlockV2(miner Address, txs []Transaction) *Bloc
 	}
 	allTxs = append(allTxs, txs...)
 
+	// Calculate merkle root from all transactions
+	merkleRoot := consensusManager.CalculateMerkleRoot(allTxs)
+
 	// Create block template
 	block := &Block{
 		Header: BlockHeader{
@@ -505,7 +533,7 @@ func (bc *BlockchainV2) CreateNewBlockV2(miner Address, txs []Transaction) *Bloc
 			Difficulty:  difficulty,
 			Miner:       miner,
 			Nonce:       0,
-			MerkleRoot:  Hash{}, // TODO: Calculate merkle root
+			MerkleRoot:  merkleRoot, // Calculate merkle root from transactions
 			TxCount:     uint32(len(allTxs)),
 			NetworkFee:  txFees,
 			TreasuryFee: blockRewardDist.TreasuryReward,

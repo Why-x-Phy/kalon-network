@@ -218,12 +218,12 @@ func (s *ServerV2) handleRequest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	w.Header().Set("Access-Control-Max-Age", "3600")
-	
+
 	// Security headers
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.Header().Set("X-XSS-Protection", "1; mode=block")
-	
+
 	// Cache control headers
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	w.Header().Set("Pragma", "no-cache")
@@ -525,8 +525,10 @@ func (s *ServerV2) handleGetBestBlock(req *RPCRequest) *RPCResponse {
 	return &RPCResponse{
 		JSONRPC: "2.0",
 		Result: map[string]interface{}{
-			"hash":   hex.EncodeToString(block.Hash[:]),
-			"number": block.Header.Number,
+			"hash":       hex.EncodeToString(block.Hash[:]),
+			"number":     block.Header.Number,
+			"merkleRoot": hex.EncodeToString(block.Header.MerkleRoot[:]), // Include merkle root
+			"txCount":    block.Header.TxCount,                           // Include tx count
 		},
 		ID: req.ID,
 	}
@@ -1040,6 +1042,29 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 
 	log.Printf("🔍 DEBUG: Total transactions parsed: %d", len(transactions))
 
+	// Parse merkle root
+	var merkleRoot core.Hash
+	if merkleRootStr, ok := data["merkleRoot"].(string); ok {
+		merkleRootBytes, err := hex.DecodeString(merkleRootStr)
+		if err == nil && len(merkleRootBytes) == 32 {
+			copy(merkleRoot[:], merkleRootBytes)
+		}
+	}
+
+	// Parse tx count
+	var txCount uint32
+	if txCountFloat, ok := data["txCount"].(float64); ok {
+		txCount = uint32(txCountFloat)
+	} else {
+		txCount = uint32(len(transactions))
+	}
+
+	// Parse miner address
+	var miner core.Address
+	if minerStr, ok := data["miner"].(string); ok {
+		miner = core.AddressFromString(minerStr)
+	}
+
 	// Create block with transactions
 	block := &core.Block{
 		Header: core.BlockHeader{
@@ -1047,6 +1072,9 @@ func (s *ServerV2) parseBlockData(data map[string]interface{}) (*core.Block, err
 			Difficulty: uint64(difficulty),
 			Nonce:      uint64(nonce),
 			Timestamp:  time.Unix(int64(timestamp), 0),
+			MerkleRoot: merkleRoot, // Parse merkle root from block data
+			TxCount:    txCount,    // Parse tx count from block data
+			Miner:      miner,      // Parse miner address
 		},
 		Txs: transactions, // Use parsed transactions
 	}
