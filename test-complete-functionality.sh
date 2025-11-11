@@ -290,12 +290,17 @@ echo ""
 echo "=== TEST CONCURRENT RPC CALLS (Lock Performance) ==="
 echo "Sending 20 concurrent getBestBlock requests..."
 START_TIME=$(date +%s%N)
+PIDS=()
 for i in {1..20}; do
     curl -s -X POST -H "Content-Type: application/json" \
         -d '{"jsonrpc":"2.0","method":"getBestBlock","params":[],"id":'$i'}' \
         http://localhost:$RPC_PORT > /dev/null 2>&1 &
+    PIDS+=($!)
 done
-wait
+# Wait only for the curl processes we started
+for pid in "${PIDS[@]}"; do
+    wait $pid 2>/dev/null || true
+done
 END_TIME=$(date +%s%N)
 DURATION=$((($END_TIME - $START_TIME) / 1000000))
 echo "20 concurrent requests completed in ${DURATION}ms"
@@ -310,12 +315,17 @@ echo ""
 echo "=== TEST CONCURRENT getRecentBlocks CALLS ==="
 echo "Sending 20 concurrent getRecentBlocks requests..."
 START_TIME=$(date +%s%N)
+PIDS=()
 for i in {1..20}; do
     curl -s -X POST -H "Content-Type: application/json" \
         -d '{"jsonrpc":"2.0","method":"getRecentBlocks","params":[10],"id":'$i'}' \
         http://localhost:$RPC_PORT > /dev/null 2>&1 &
+    PIDS+=($!)
 done
-wait
+# Wait only for the curl processes we started
+for pid in "${PIDS[@]}"; do
+    wait $pid 2>/dev/null || true
+done
 END_TIME=$(date +%s%N)
 DURATION=$((($END_TIME - $START_TIME) / 1000000))
 echo "20 concurrent requests completed in ${DURATION}ms"
