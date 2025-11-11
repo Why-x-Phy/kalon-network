@@ -1,8 +1,0 @@
-Enter passphrase (optional): Wallet created successfully!
-Address: kalon18099c12c3019b0cd7b8e13a46b8bb790fd0aee66
-Public Key: fe4dd330b2d1905c1a35eaf9744be6b3064cdfb7c94926e16239459da1c39da2
-Mnemonic: appear trigger vanish burst bring hedgehog borrow black report siren slab review pet pumpkin tiger fall drop tree chuckle inside tiny ask surface praise
-Wallet saved to: wallet-wallet1.json
-
-⚠️  IMPORTANT: Save your mnemonic phrase in a safe place!
-   You will need it to recover your wallet if you lose access.

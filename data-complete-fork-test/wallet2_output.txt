@@ -1,8 +1,0 @@
-Enter passphrase (optional): Wallet created successfully!
-Address: kalon19832acf6c0a4764ad748cf054dcc9839830bedf3
-Public Key: 270af0e04ab9dcfda8b398f3f682e51bf5eb2bc6c3a40fbd9674949cf3e34293
-Mnemonic: scatter thunder renew major regret weasel verb alpha cash mixed sustain someone mesh rib disorder surround two health globe very response raccoon correct other
-Wallet saved to: wallet-wallet2.json
-
-⚠️  IMPORTANT: Save your mnemonic phrase in a safe place!
-   You will need it to recover your wallet if you lose access.

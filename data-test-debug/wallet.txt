@@ -1,8 +1,0 @@
-Enter passphrase (optional): Wallet created successfully!
-Address: kalon18c165493fbad7991a4b7d7778365b01eeed2678e
-Public Key: 1742a46ab5c652d2fde00f8e408f4ffcb1418c45c2d83c6a9e577f55041ee029
-Mnemonic: fragile same uncle disorder road shrug base gentle tiny deny bargain planet bless because ancient math fragile become blade search ethics style lamp mask
-Wallet saved to: wallet-test-wallet.json
-
-⚠️  IMPORTANT: Save your mnemonic phrase in a safe place!
-   You will need it to recover your wallet if you lose access.

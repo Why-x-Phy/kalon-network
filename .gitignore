@@ -58,3 +58,31 @@ docker-data/
 # Temporary files
 tmp/
 temp/
+
+# Test data directories
+data-*/
+data-test-*/
+data-complete-*/
+data-local-*/
+data-quick-*/
+data-fork-*/
+data-v2/
+
+# Test logs and outputs
+*.log
+*.txt
+test-*.log
+test-*.txt
+*-output.txt
+*-output.log
+wallet*.json
+wallet-*.json
+tx-*.txt
+
+# Build artifacts (keep binaries for now)
+# build-v2/
+
+# Temporary files
+*.tmp
+*.swp
+*.bak
