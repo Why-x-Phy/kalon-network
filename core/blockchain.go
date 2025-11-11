@@ -802,6 +802,31 @@ func (bc *BlockchainV2) GetBlockByNumber(number uint64) (*Block, error) {
 	return nil, fmt.Errorf("block %d not found", number)
 }
 
+// GetBlockByHash returns a block by its hash
+func (bc *BlockchainV2) GetBlockByHash(hash []byte) (*Block, error) {
+	bc.mu.RLock()
+	defer bc.mu.RUnlock()
+
+	// Convert hash to Hash type
+	var hashValue Hash
+	if len(hash) != 32 {
+		return nil, fmt.Errorf("invalid hash length: expected 32 bytes, got %d", len(hash))
+	}
+	copy(hashValue[:], hash)
+
+	// Check if block is in memory (block index)
+	if block := bc.getBlockByHash(hashValue); block != nil {
+		return block, nil
+	}
+
+	// Try to get from storage
+	if bc.storage != nil {
+		return bc.storage.GetBlockByHash(hash)
+	}
+
+	return nil, fmt.Errorf("block with hash %x not found", hash)
+}
+
 // GetTotalTransactions returns the total number of transactions in all blocks
 func (bc *BlockchainV2) GetTotalTransactions() uint64 {
 	bc.mu.RLock()

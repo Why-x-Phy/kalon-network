@@ -89,6 +89,7 @@
         </div>
     </section>
 
+    <script src="config.js"></script>
     <script>
         // RPC Server URL (konfigurierbar)
         const RPC_URL = window.RPC_URL || 'http://localhost:16316';
@@ -160,85 +161,158 @@
             }
         }
 
-        // Get block hash from URL
+        // Get block hash or number from URL
         const params = new URLSearchParams(window.location.search);
         const hash = params.get('h');
+        const number = params.get('n');
         
         // Start online status checking
         checkConnectionStatus();
         statusCheckInterval = setInterval(checkConnectionStatus, 5000);
         
         if (hash) {
-            // Load block details from RPC
-            loadBlockDetails(hash);
+            // Load block details by hash
+            loadBlockDetailsByHash(hash);
+        } else if (number) {
+            // Load block details by number
+            loadBlockDetailsByNumber(parseInt(number, 10));
         } else {
-            renderMockBlock();
+            // No hash or number provided, show error
+            document.getElementById('blockTitle').textContent = 'Error: No block hash or number provided';
+            document.getElementById('blockHash').textContent = 'Please provide a block hash (?h=...) or block number (?n=...)';
         }
 
-        async function loadBlockDetails(blockHash) {
+        async function loadBlockDetailsByHash(blockHash) {
             try {
+                // Remove "0x" prefix if present
+                const cleanHash = blockHash.startsWith('0x') ? blockHash.substring(2) : blockHash;
+                
                 // Try to get block by hash
-                const block = await callRPC('getBlockByHash', { hash: blockHash });
+                const block = await callRPC('getBlockByHash', { hash: cleanHash });
                 
                 if (block) {
                     renderBlock(block);
                 } else {
-                    // Fallback: try to get best block
-                    const bestBlock = await callRPC('getBestBlock');
-                    if (bestBlock) {
-                        renderBlock(bestBlock);
-                    } else {
-                        renderMockBlock();
-                    }
+                    showError('Block not found');
                 }
             } catch (error) {
                 console.error('Error loading block:', error);
                 updateOnlineStatus(false);
-                renderMockBlock();
+                showError(`Error loading block: ${error.message}`);
             }
+        }
+
+        async function loadBlockDetailsByNumber(blockNumber) {
+            try {
+                // Try to get block by number
+                const block = await callRPC('getBlockByNumber', { number: blockNumber });
+                
+                if (block) {
+                    renderBlock(block);
+                } else {
+                    showError('Block not found');
+                }
+            } catch (error) {
+                console.error('Error loading block:', error);
+                updateOnlineStatus(false);
+                showError(`Error loading block: ${error.message}`);
+            }
+        }
+
+        function showError(message) {
+            document.getElementById('blockTitle').textContent = 'Error';
+            document.getElementById('blockHash').textContent = message;
+            document.getElementById('parentHash').textContent = '-';
+            document.getElementById('blockReward').textContent = '-';
+            document.getElementById('difficulty').textContent = '-';
+            document.getElementById('timestamp').textContent = '-';
+            document.getElementById('miner').textContent = '-';
+            document.getElementById('nonce').textContent = '-';
+            document.getElementById('txTable').innerHTML = `
+                <tr>
+                    <td colspan="4" style="text-align: center; padding: 40px; color: #f44336;">
+                        ${message}
+                    </td>
+                </tr>
+            `;
         }
         
         function renderBlock(block) {
-            document.getElementById('blockTitle').textContent = `Block #${block.number || block.Header?.Number || 'N/A'}`;
-            document.getElementById('blockHash').textContent = formatHash(block.hash || block.Hash || 'N/A');
-            const parentHash = block.parentHash || block.Header?.ParentHash || block.Header?.parentHash || '';
-            if (parentHash) {
-                document.getElementById('parentHash').innerHTML = `<a href="block.html?h=${formatHash(parentHash)}" class="hash-link">${formatHash(parentHash)}</a>`;
+            // Block title
+            document.getElementById('blockTitle').textContent = `Block #${block.number || 'N/A'}`;
+            
+            // Block hash
+            const blockHash = block.hash || '';
+            document.getElementById('blockHash').textContent = formatHash(blockHash);
+            
+            // Parent hash
+            const parentHash = block.parentHash || '';
+            if (parentHash && block.number > 0) {
+                document.getElementById('parentHash').innerHTML = `<a href="block.html?h=${block.parentHash}" class="hash-link">${formatHash(parentHash)}</a>`;
             } else {
                 document.getElementById('parentHash').textContent = 'Genesis block';
             }
-            document.getElementById('blockReward').textContent = '5.00 tKALON';
-            document.getElementById('difficulty').textContent = block.difficulty || block.Header?.Difficulty || 'N/A';
             
-            const timestamp = block.timestamp || block.Header?.Timestamp;
+            // Block reward (fixed for now)
+            document.getElementById('blockReward').textContent = '5.00 tKALON';
+            
+            // Difficulty
+            document.getElementById('difficulty').textContent = formatNumber(block.difficulty || 0);
+            
+            // Timestamp
+            const timestamp = block.timestamp;
             if (timestamp) {
-                const date = timestamp instanceof Date ? timestamp : new Date(timestamp * 1000);
-                document.getElementById('timestamp').textContent = date.toLocaleString();
+                const date = new Date(timestamp * 1000);
+                document.getElementById('timestamp').textContent = date.toLocaleString('de-DE');
             } else {
                 document.getElementById('timestamp').textContent = 'N/A';
             }
             
-            const miner = block.miner || block.Header?.Miner || '';
+            // Miner
+            const miner = block.miner || '';
             if (miner) {
-                document.getElementById('miner').innerHTML = `<a href="#" class="hash-link">${formatHash(miner)}</a>`;
+                // Try to convert to address format if it's a hex string
+                const minerAddress = miner.startsWith('kalon1') ? miner : `kalon1${miner}`;
+                document.getElementById('miner').innerHTML = `<a href="wallet.html?address=${encodeURIComponent(minerAddress)}" class="hash-link">${formatHash(miner)}</a>`;
             } else {
                 document.getElementById('miner').textContent = 'N/A';
             }
             
-            document.getElementById('nonce').textContent = block.nonce || block.Header?.Nonce || 'N/A';
+            // Nonce
+            document.getElementById('nonce').textContent = formatNumber(block.nonce || 0);
             
             // Render transactions
-            const transactions = block.transactions || block.Txs || [];
+            const transactions = block.transactions || [];
             if (transactions.length > 0) {
-                document.getElementById('txTable').innerHTML = transactions.map(tx => `
+                document.getElementById('txTable').innerHTML = transactions.map(tx => {
+                    const txHash = tx.hash || '';
+                    const fromAddr = tx.from || '';
+                    const toAddr = tx.to || '';
+                    const amount = tx.amount || 0;
+                    
+                    return `
+                        <tr>
+                            <td><a href="#" class="hash-link">${formatHash(txHash)}</a></td>
+                            <td><a href="wallet.html?address=${encodeURIComponent(fromAddr)}" class="hash-link">${formatHash(fromAddr)}</a></td>
+                            <td><a href="wallet.html?address=${encodeURIComponent(toAddr)}" class="hash-link">${formatHash(toAddr)}</a></td>
+                            <td>${(amount / 1000000).toFixed(6)} tKALON</td>
+                        </tr>
+                    `;
+                }).join('');
+            } else {
+                document.getElementById('txTable').innerHTML = `
                     <tr>
-                        <td><a href="#" class="hash-link">${formatHash(tx.hash || tx.Hash || 'N/A')}</a></td>
-                        <td><a href="#" class="hash-link">${formatHash(tx.from || tx.From || 'N/A')}</a></td>
-                        <td><a href="#" class="hash-link">${formatHash(tx.to || tx.To || 'N/A')}</a></td>
-                        <td>${(tx.amount || tx.Amount || 0) / 1000000} tKALON</td>
+                        <td colspan="4" style="text-align: center; padding: 40px; color: #666;">
+                            No transactions in this block
+                        </td>
                     </tr>
-                `).join('');
+                `;
             }
+        }
+        
+        function formatNumber(num) {
+            if (!num) return '0';
+            return num.toLocaleString();
         }
         
         function formatHash(hash) {
@@ -247,21 +321,16 @@
                 // Convert byte array to hex
                 return Array.from(hash).map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 20) + '...';
             }
-            if (typeof hash === 'string' && hash.length > 20) {
-                return hash.substring(0, 10) + '...' + hash.substring(hash.length - 10);
+            if (typeof hash === 'string') {
+                // Remove "0x" prefix if present
+                const cleanHash = hash.startsWith('0x') ? hash.substring(2) : hash;
+                // If hash is longer than 20 characters, truncate it
+                if (cleanHash.length > 20) {
+                    return cleanHash.substring(0, 10) + '...' + cleanHash.substring(cleanHash.length - 10);
+                }
+                return cleanHash;
             }
-            return hash.startsWith('0x') ? hash : `0x${hash}`;
-        }
-        
-        function renderMockBlock() {
-            document.getElementById('blockTitle').textContent = 'Block #1';
-            document.getElementById('blockHash').textContent = hash || 'No hash provided';
-            document.getElementById('parentHash').textContent = 'Genesis block';
-            document.getElementById('blockReward').textContent = '5.00 tKALON';
-            document.getElementById('difficulty').textContent = '1000';
-            document.getElementById('timestamp').textContent = new Date().toLocaleString();
-            document.getElementById('miner').textContent = 'kalon1...';
-            document.getElementById('nonce').textContent = '0';
+            return 'N/A';
         }
     </script>
 </body>

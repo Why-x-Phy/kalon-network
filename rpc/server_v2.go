@@ -376,6 +376,10 @@ func (s *ServerV2) handleRPCMethod(req *RPCRequest) *RPCResponse {
 		return s.handleGetAddressInfo(req)
 	case "getAddressTransactions":
 		return s.handleGetAddressTransactions(req)
+	case "getBlockByHash":
+		return s.handleGetBlockByHash(req)
+	case "getBlockByNumber":
+		return s.handleGetBlockByNumber(req)
 	default:
 		return &RPCResponse{
 			JSONRPC: "2.0",
@@ -1601,6 +1605,194 @@ func (s *ServerV2) handleGetAddressTransactions(req *RPCRequest) *RPCResponse {
 			"transactions": txList,
 		},
 		ID: req.ID,
+	}
+}
+
+// serializeBlock serializes a block to JSON-compatible format
+func (s *ServerV2) serializeBlock(block *core.Block) map[string]interface{} {
+	if block == nil {
+		return nil
+	}
+
+	// Serialize transactions
+	txList := make([]interface{}, 0, len(block.Txs))
+	for _, tx := range block.Txs {
+		txMap := map[string]interface{}{
+			"hash":      hex.EncodeToString(tx.Hash[:]),
+			"from":      hex.EncodeToString(tx.From[:]),
+			"to":        hex.EncodeToString(tx.To[:]),
+			"amount":    tx.Amount,
+			"fee":       tx.Fee,
+			"nonce":     tx.Nonce,
+			"timestamp": tx.Timestamp.Unix(),
+		}
+
+		// Serialize outputs
+		outputs := make([]interface{}, 0, len(tx.Outputs))
+		for _, output := range tx.Outputs {
+			outputs = append(outputs, map[string]interface{}{
+				"address": hex.EncodeToString(output.Address[:]),
+				"amount":  output.Amount,
+			})
+		}
+		txMap["outputs"] = outputs
+
+		// Serialize inputs
+		inputs := make([]interface{}, 0, len(tx.Inputs))
+		for _, input := range tx.Inputs {
+			inputs = append(inputs, map[string]interface{}{
+				"previousTxHash": hex.EncodeToString(input.PreviousTxHash[:]),
+				"index":          input.Index,
+			})
+		}
+		txMap["inputs"] = inputs
+
+		txList = append(txList, txMap)
+	}
+
+	txCount := uint32(len(block.Txs))
+	blockMap := map[string]interface{}{
+		"hash":         hex.EncodeToString(block.Hash[:]),
+		"number":       block.Header.Number,
+		"parentHash":   hex.EncodeToString(block.Header.ParentHash[:]),
+		"timestamp":    float64(block.Header.Timestamp.Unix()),
+		"difficulty":   block.Header.Difficulty,
+		"nonce":        block.Header.Nonce,
+		"merkleRoot":   hex.EncodeToString(block.Header.MerkleRoot[:]),
+		"txCount":      txCount,
+		"networkFee":   block.Header.NetworkFee,
+		"treasuryFee":  block.Header.TreasuryFee,
+		"transactions": txList,
+	}
+
+	// Add miner if available
+	if block.Header.Miner != (core.Address{}) {
+		blockMap["miner"] = block.Header.Miner.String()
+	}
+
+	return blockMap
+}
+
+// handleGetBlockByHash handles getBlockByHash requests
+func (s *ServerV2) handleGetBlockByHash(req *RPCRequest) *RPCResponse {
+	// Parse parameters
+	params, ok := req.Params.(map[string]interface{})
+	if !ok {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid params",
+				Data:    "Expected object with 'hash' field",
+			},
+			ID: req.ID,
+		}
+	}
+
+	hashStr, ok := params["hash"].(string)
+	if !ok {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid params",
+				Data:    "Missing or invalid 'hash' field",
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Remove "0x" prefix if present
+	hashStr = strings.TrimPrefix(hashStr, "0x")
+
+	// Decode hex hash
+	hashBytes, err := hex.DecodeString(hashStr)
+	if err != nil || len(hashBytes) != 32 {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid params",
+				Data:    "Invalid hash format: expected 64-character hex string",
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Get block by hash
+	block, err := s.blockchain.GetBlockByHash(hashBytes)
+	if err != nil {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32603,
+				Message: "Block not found",
+				Data:    err.Error(),
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Serialize block
+	blockMap := s.serializeBlock(block)
+
+	return &RPCResponse{
+		JSONRPC: "2.0",
+		Result:  blockMap,
+		ID:      req.ID,
+	}
+}
+
+// handleGetBlockByNumber handles getBlockByNumber requests
+func (s *ServerV2) handleGetBlockByNumber(req *RPCRequest) *RPCResponse {
+	// Parse parameters
+	params, ok := req.Params.(map[string]interface{})
+	if !ok {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid params",
+				Data:    "Expected object with 'number' field",
+			},
+			ID: req.ID,
+		}
+	}
+
+	number, ok := params["number"].(float64)
+	if !ok {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32602,
+				Message: "Invalid params",
+				Data:    "Missing or invalid 'number' field",
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Get block by number
+	block, err := s.blockchain.GetBlockByNumber(uint64(number))
+	if err != nil {
+		return &RPCResponse{
+			JSONRPC: "2.0",
+			Error: &RPCError{
+				Code:    -32603,
+				Message: "Block not found",
+				Data:    err.Error(),
+			},
+			ID: req.ID,
+		}
+	}
+
+	// Serialize block
+	blockMap := s.serializeBlock(block)
+
+	return &RPCResponse{
+		JSONRPC: "2.0",
+		Result:  blockMap,
+		ID:      req.ID,
 	}
 }
 
