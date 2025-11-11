@@ -164,7 +164,7 @@ echo ""
 # Get wallet1 balance
 echo "=== GET WALLET1 BALANCE ==="
 WALLET1_BALANCE=$(curl -s -X POST -H "Content-Type: application/json" \
-    -d "{\"jsonrpc\":\"2.0\",\"method\":\"getBalance\",\"params\":[\"$WALLET1_ADDRESS\"],\"id\":1}" \
+    -d "{\"jsonrpc\":\"2.0\",\"method\":\"getBalance\",\"params\":{\"address\":\"$WALLET1_ADDRESS\"},\"id\":1}" \
     http://localhost:$RPC_PORT | grep -oP '"result":\s*\K[0-9]+' || echo "0")
 echo "Wallet 1 Balance: $WALLET1_BALANCE"
 if [ "$WALLET1_BALANCE" -gt "0" ]; then
@@ -181,7 +181,7 @@ if [ "$WALLET1_BALANCE" -gt "1000000" ]; then
     echo "Sending $TX_AMOUNT from wallet1 to wallet2..."
     
     # Get wallet passphrase (empty for test)
-    echo "" | ./build-v2/kalon-wallet send -wallet wallet1 -to "$WALLET2_ADDRESS" -amount $TX_AMOUNT -rpc http://localhost:$RPC_PORT > "$DATA_DIR/tx_output.txt" 2>&1 || true
+    echo "" | ./build-v2/kalon-wallet send -input wallet-wallet1.json -to "$WALLET2_ADDRESS" -amount $TX_AMOUNT -fee 10000 -rpc http://localhost:$RPC_PORT/rpc > "$DATA_DIR/tx_output.txt" 2>&1 || true
     TX_OUTPUT=$(cat "$DATA_DIR/tx_output.txt")
     echo "$TX_OUTPUT"
     
@@ -208,7 +208,7 @@ if [ "$TX_SENT" = true ]; then
     # Get wallet2 balance
     echo "=== GET WALLET2 BALANCE ==="
     WALLET2_BALANCE=$(curl -s -X POST -H "Content-Type: application/json" \
-        -d "{\"jsonrpc\":\"2.0\",\"method\":\"getBalance\",\"params\":[\"$WALLET2_ADDRESS\"],\"id\":1}" \
+        -d "{\"jsonrpc\":\"2.0\",\"method\":\"getBalance\",\"params\":{\"address\":\"$WALLET2_ADDRESS\"},\"id\":1}" \
         http://localhost:$RPC_PORT | grep -oP '"result":\s*\K[0-9]+' || echo "0")
     echo "Wallet 2 Balance: $WALLET2_BALANCE"
     if [ "$WALLET2_BALANCE" -gt "0" ]; then

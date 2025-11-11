@@ -1,7 +1,7 @@
 Enter passphrase (optional): Wallet created successfully!
-Address: kalon16770c76c71e6f0741f224e09c680ff770cb323c9
-Public Key: 4611858b5a800db9ab118a4f64eee5354952c37b61e41223520c8fb378d66e2e
-Mnemonic: pipe price ocean negative divert memory buzz push slide fee screen text sauce collect wall apology rule arm drip toward whale shy oven accuse
+Address: kalon1c05962dfd40b1ad8b6f64f5bda315de9f325d146
+Public Key: 663142ba985e42a72830895662feaa52abc64ae3b8e93bb2226c422f1369354c
+Mnemonic: kid jar orange unhappy human bag joke layer obtain song baby lamp raccoon total earth creek thunder evidence misery warfare rain sudden sport fiscal
 Wallet saved to: wallet-wallet2.json
 
 ⚠️  IMPORTANT: Save your mnemonic phrase in a safe place!

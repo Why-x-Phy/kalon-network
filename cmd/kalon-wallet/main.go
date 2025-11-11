@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -124,9 +123,9 @@ func handleCreate(wm *WalletManager, args []string) {
 	name := fs.String("name", "", "Wallet name (will be saved as wallet-{name}.json)")
 	output := fs.String("output", "", "Output file for wallet (overrides name)")
 	fs.Parse(args)
-	
+
 	reader := bufio.NewReader(os.Stdin)
-	
+
 	// If no custom output specified, ask for name
 	if *output == "" && *name == "" {
 		fmt.Print("Enter wallet name (leave empty for 'wallet.json'): ")
@@ -135,7 +134,7 @@ func handleCreate(wm *WalletManager, args []string) {
 			log.Fatalf("Failed to read wallet name: %v", err)
 		}
 		nameInput = strings.TrimSpace(nameInput)
-		
+
 		if nameInput != "" {
 			*name = nameInput
 			*output = fmt.Sprintf("wallet-%s.json", *name)
@@ -183,7 +182,7 @@ func handleCreate(wm *WalletManager, args []string) {
 	if _, err := os.Stat(*output); err == nil {
 		log.Fatalf("Wallet file already exists: %s. Use --name to create a different wallet.", *output)
 	}
-	
+
 	// Save wallet
 	if err := saveWallet(walletInfo, *output); err != nil {
 		log.Fatalf("Failed to save wallet: %v", err)
@@ -345,18 +344,47 @@ func handleSend(wm *WalletManager, args []string) {
 	amount := fs.Uint64("amount", 0, "Amount to send")
 	fee := fs.Uint64("fee", 1000000, "Transaction fee (micro-KALON)")
 	rpcURL := fs.String("rpc", "http://localhost:16314", "RPC server URL")
+	input := fs.String("input", "", "Input wallet file (default: wallet.json or wallet-wallet1.json)")
 	fs.Parse(args)
 
 	if *to == "" || *amount == 0 {
 		log.Fatal("Recipient address and amount are required")
 	}
 
-	if wm.wallet == nil {
-		log.Fatal("No wallet loaded. Use 'create' or 'import' first.")
+	// Load wallet if not already loaded
+	var wallet *crypto.Wallet
+	if wm.wallet != nil {
+		wallet = wm.wallet
+	} else {
+		// Try to find wallet file
+		walletFile := *input
+		if walletFile == "" {
+			// Try common wallet file names
+			if _, err := os.Stat("wallet-wallet1.json"); err == nil {
+				walletFile = "wallet-wallet1.json"
+			} else if _, err := os.Stat("wallet.json"); err == nil {
+				walletFile = "wallet.json"
+			} else {
+				log.Fatal("No wallet loaded and no wallet file found. Use 'create' or 'import' first, or specify -input")
+			}
+		}
+
+		// Load wallet from file
+		walletInfo, err := loadWallet(walletFile)
+		if err != nil {
+			log.Fatalf("Failed to load wallet: %v", err)
+		}
+
+		// Create wallet from mnemonic
+		bm := crypto.NewBIP39Manager()
+		wallet, err = bm.CreateWalletFromMnemonic(walletInfo.Mnemonic, "")
+		if err != nil {
+			log.Fatalf("Failed to create wallet from mnemonic: %v", err)
+		}
 	}
 
 	// Get wallet address
-	fromAddress, err := wm.wallet.GetAddressString()
+	fromAddress, err := wallet.GetAddressString()
 	if err != nil {
 		log.Fatalf("Failed to get wallet address: %v", err)
 	}
@@ -370,7 +398,7 @@ func handleSend(wm *WalletManager, args []string) {
 	}
 
 	// Send transaction
-	txResp, err := sendTransaction(*rpcURL, txReq)
+	txResp, err := sendTransaction(*rpcURL, txReq, wallet)
 	if err != nil {
 		log.Fatalf("Failed to send transaction: %v", err)
 	}
@@ -486,26 +514,26 @@ func queryBalance(rpcURL, address string) (uint64, error) {
 func handleList(args []string) {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 	fs.Parse(args)
-	
+
 	fmt.Println("Available wallets:")
-	
+
 	// Find all wallet files
 	wd, err := os.Getwd()
 	if err != nil {
 		log.Fatalf("Failed to get working directory: %v", err)
 	}
-	
+
 	files, err := os.ReadDir(wd)
 	if err != nil {
 		log.Fatalf("Failed to read directory: %v", err)
 	}
-	
+
 	found := false
 	for _, file := range files {
 		if file.IsDir() {
 			continue
 		}
-		
+
 		if strings.HasPrefix(file.Name(), "wallet") && strings.HasSuffix(file.Name(), ".json") {
 			found = true
 			walletInfo, err := loadWallet(file.Name())
@@ -513,7 +541,7 @@ func handleList(args []string) {
 				fmt.Printf("  ⚠️  %s (corrupted)\n", file.Name())
 				continue
 			}
-			
+
 			fmt.Printf("  📄 %s\n", file.Name())
 			fmt.Printf("     Address: %s\n", walletInfo.Address)
 			if walletInfo.PublicKey != "" {
@@ -522,20 +550,77 @@ func handleList(args []string) {
 			fmt.Println()
 		}
 	}
-	
+
 	if !found {
 		fmt.Println("  No wallets found. Use 'kalon-wallet create' to create one.")
 	}
 }
 
 // sendTransaction sends a transaction via RPC
-func sendTransaction(rpcURL string, txReq *TransactionRequest) (*TransactionResponse, error) {
-	// This is a simplified implementation
-	// In a real implementation, you would make an HTTP request to the RPC server
+func sendTransaction(rpcURL string, txReq *TransactionRequest, wallet *crypto.Wallet) (*TransactionResponse, error) {
+	// Ensure RPC URL has /rpc endpoint
+	if !strings.HasSuffix(rpcURL, "/rpc") {
+		if !strings.HasSuffix(rpcURL, "/") {
+			rpcURL += "/rpc"
+		} else {
+			rpcURL += "rpc"
+		}
+	}
 
-	// For now, return a mock response
+	// Create RPC request
+	req := RPCRequest{
+		JSONRPC: "2.0",
+		Method:  "sendTransaction",
+		Params: map[string]interface{}{
+			"from":   txReq.From,
+			"to":     txReq.To,
+			"amount": txReq.Amount,
+			"fee":    txReq.Fee,
+		},
+		ID: 1,
+	}
+
+	// Marshal request
+	reqData, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %v", err)
+	}
+
+	// Make HTTP request
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Post(rpcURL, "application/json", bytes.NewBuffer(reqData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to send transaction: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %v", err)
+	}
+
+	// Parse response
+	var rpcResp RPCResponse
+	if err := json.Unmarshal(body, &rpcResp); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %v", err)
+	}
+
+	// Check for RPC error
+	if rpcResp.Error != nil {
+		return nil, fmt.Errorf("RPC error: %s", rpcResp.Error.Message)
+	}
+
+	// Extract transaction hash from result
+	result, ok := rpcResp.Result.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid response format")
+	}
+
+	txHash, _ := result["txHash"].(string)
+
 	return &TransactionResponse{
-		Hash:    "0x" + hex.EncodeToString([]byte("mock_tx_hash")),
+		Hash:    txHash,
 		From:    txReq.From,
 		To:      txReq.To,
 		Amount:  txReq.Amount,
