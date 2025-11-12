@@ -80,7 +80,7 @@ echo ""
 # Wait for node to be ready
 echo "=== WAIT FOR NODE READY ==="
 for i in {1..30}; do
-    if curl -s -X POST -H "Content-Type: application/json" \
+    if timeout 3 curl -s -X POST -H "Content-Type: application/json" \
         -d '{"jsonrpc":"2.0","method":"getBestBlock","params":[],"id":1}' \
         http://localhost:$RPC_PORT > /dev/null 2>&1; then
         echo "✅ Node is ready"
@@ -133,12 +133,30 @@ echo "=== MINE BLOCKS ==="
 echo "Waiting for blocks to be mined..."
 BLOCKS_MINED=0
 INITIAL_HEIGHT=0
+TIMEOUT_COUNT=0
+MAX_TIMEOUTS=5
+
 for i in {1..120}; do
-    BEST_BLOCK=$(curl -s -X POST -H "Content-Type: application/json" \
+    # Use timeout for curl to prevent hanging
+    BEST_BLOCK=$(timeout 3 curl -s -X POST -H "Content-Type: application/json" \
         -d '{"jsonrpc":"2.0","method":"getBestBlock","params":[],"id":1}' \
-        http://localhost:$RPC_PORT | grep -oP '"number":\s*\K[0-9]+' || echo "0")
+        http://localhost:$RPC_PORT 2>/dev/null | grep -oP '"number":\s*\K[0-9]+' || echo "0")
     
-    if [ ! -z "$BEST_BLOCK" ]; then
+    # Check if curl failed (timeout or connection refused)
+    if [ "$BEST_BLOCK" = "0" ] || [ -z "$BEST_BLOCK" ]; then
+        TIMEOUT_COUNT=$((TIMEOUT_COUNT + 1))
+        if [ "$TIMEOUT_COUNT" -ge "$MAX_TIMEOUTS" ]; then
+            echo -e "${YELLOW}⚠️ RPC server not responding after $TIMEOUT_COUNT attempts${NC}"
+            echo "Checking if node is still running..."
+            if ! ps -p $NODE_PID > /dev/null 2>&1; then
+                echo -e "${RED}❌ Node process died!${NC}"
+                exit 1
+            fi
+            # Reset timeout count and continue
+            TIMEOUT_COUNT=0
+        fi
+    else
+        TIMEOUT_COUNT=0
         if [ "$i" -eq 1 ]; then
             INITIAL_HEIGHT=$BEST_BLOCK
         fi
@@ -163,9 +181,9 @@ echo ""
 
 # Get wallet1 balance
 echo "=== GET WALLET1 BALANCE ==="
-WALLET1_BALANCE=$(curl -s -X POST -H "Content-Type: application/json" \
+WALLET1_BALANCE=$(timeout 3 curl -s -X POST -H "Content-Type: application/json" \
     -d "{\"jsonrpc\":\"2.0\",\"method\":\"getBalance\",\"params\":{\"address\":\"$WALLET1_ADDRESS\"},\"id\":1}" \
-    http://localhost:$RPC_PORT | grep -oP '"result":\s*\K[0-9]+' || echo "0")
+    http://localhost:$RPC_PORT 2>/dev/null | grep -oP '"result":\s*\K[0-9]+' || echo "0")
 echo "Wallet 1 Balance: $WALLET1_BALANCE"
 if [ "$WALLET1_BALANCE" -gt "0" ]; then
     echo -e "${GREEN}✅ Wallet 1 has balance${NC}"
@@ -207,9 +225,9 @@ if [ "$TX_SENT" = true ]; then
     
     # Get wallet2 balance
     echo "=== GET WALLET2 BALANCE ==="
-    WALLET2_BALANCE=$(curl -s -X POST -H "Content-Type: application/json" \
-        -d "{\"jsonrpc\":\"2.0\",\"method\":\"getBalance\",\"params\":{\"address\":\"$WALLET2_ADDRESS\"},\"id\":1}" \
-        http://localhost:$RPC_PORT | grep -oP '"result":\s*\K[0-9]+' || echo "0")
+WALLET2_BALANCE=$(timeout 3 curl -s -X POST -H "Content-Type: application/json" \
+    -d "{\"jsonrpc\":\"2.0\",\"method\":\"getBalance\",\"params\":{\"address\":\"$WALLET2_ADDRESS\"},\"id\":1}" \
+    http://localhost:$RPC_PORT 2>/dev/null | grep -oP '"result":\s*\K[0-9]+' || echo "0")
     echo "Wallet 2 Balance: $WALLET2_BALANCE"
     if [ "$WALLET2_BALANCE" -gt "0" ]; then
         echo -e "${GREEN}✅ Wallet 2 received funds${NC}"
@@ -221,9 +239,9 @@ fi
 
 # Get best block info
 echo "=== GET BEST BLOCK INFO ==="
-BEST_BLOCK_RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" \
+BEST_BLOCK_RESPONSE=$(timeout 3 curl -s -X POST -H "Content-Type: application/json" \
     -d '{"jsonrpc":"2.0","method":"getBestBlock","params":[],"id":1}' \
-    http://localhost:$RPC_PORT)
+    http://localhost:$RPC_PORT 2>/dev/null)
 
 BEST_BLOCK_NUMBER=$(echo "$BEST_BLOCK_RESPONSE" | grep -oP '"number":\s*\K[0-9]+' || echo "0")
 BEST_BLOCK_HASH=$(echo "$BEST_BLOCK_RESPONSE" | grep -oP '"hash":\s*"[0-9a-f]+' | grep -oP '"[0-9a-f]+' | tr -d '"' || echo "")
@@ -260,9 +278,9 @@ echo ""
 
 # Get recent blocks
 echo "=== GET RECENT BLOCKS ==="
-RECENT_BLOCKS_RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" \
+RECENT_BLOCKS_RESPONSE=$(timeout 3 curl -s -X POST -H "Content-Type: application/json" \
     -d '{"jsonrpc":"2.0","method":"getRecentBlocks","params":[10],"id":1}' \
-    http://localhost:$RPC_PORT)
+    http://localhost:$RPC_PORT 2>/dev/null)
 
 RECENT_BLOCKS_COUNT=$(echo "$RECENT_BLOCKS_RESPONSE" | grep -oP '"number":\s*\K[0-9]+' | wc -l)
 echo "Recent blocks count: $RECENT_BLOCKS_COUNT"
@@ -292,7 +310,7 @@ echo "Sending 20 concurrent getBestBlock requests..."
 START_TIME=$(date +%s%N)
 PIDS=()
 for i in {1..20}; do
-    curl -s -X POST -H "Content-Type: application/json" \
+    timeout 3 curl -s -X POST -H "Content-Type: application/json" \
         -d '{"jsonrpc":"2.0","method":"getBestBlock","params":[],"id":'$i'}' \
         http://localhost:$RPC_PORT > /dev/null 2>&1 &
     PIDS+=($!)
@@ -317,7 +335,7 @@ echo "Sending 20 concurrent getRecentBlocks requests..."
 START_TIME=$(date +%s%N)
 PIDS=()
 for i in {1..20}; do
-    curl -s -X POST -H "Content-Type: application/json" \
+    timeout 3 curl -s -X POST -H "Content-Type: application/json" \
         -d '{"jsonrpc":"2.0","method":"getRecentBlocks","params":[10],"id":'$i'}' \
         http://localhost:$RPC_PORT > /dev/null 2>&1 &
     PIDS+=($!)

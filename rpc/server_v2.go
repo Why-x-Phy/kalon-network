@@ -1137,7 +1137,13 @@ func (s *ServerV2) handleGetMiningInfo(req *RPCRequest) *RPCResponse {
 
 	// Use ConsensusManager to calculate difficulty (uses Genesis config)
 	consensusManager := core.NewConsensusManager(s.blockchain.GetGenesis())
-	difficulty := consensusManager.CalculateDifficulty(bestBlock.Header.Number+1, bestBlock)
+	// Get block history for LWMA difficulty adjustment
+	windowSize := int(s.blockchain.GetGenesis().Difficulty.Window)
+	if windowSize == 0 {
+		windowSize = 120 // Default window size
+	}
+	blockHistory := s.blockchain.GetBlockHistoryForDifficulty(bestBlock.Header.Number + 1)
+	difficulty := consensusManager.CalculateDifficulty(bestBlock.Header.Number+1, bestBlock, blockHistory)
 
 	return &RPCResponse{
 		JSONRPC: "2.0",

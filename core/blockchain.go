@@ -26,6 +26,8 @@ type BlockchainV2 struct {
 	forkBlocks map[string][]*Block // Key: hex-encoded parent hash
 	// Block index: Map of block hash -> block for quick lookup
 	blockIndex map[string]*Block // Key: hex-encoded block hash
+	// Block history: Separate structure for LWMA difficulty adjustment (uses separate lock)
+	blockHistory *BlockHistory
 }
 
 // BlockPersister defines the interface for persisting blocks
@@ -73,8 +75,23 @@ type DifficultyAdjustment struct {
 	adjustments []uint64
 }
 
+// BlockHistory manages block timestamps for LWMA difficulty adjustment
+// Uses separate lock to avoid contention with main blockchain lock
+type BlockHistory struct {
+	mu         sync.RWMutex
+	timestamps []time.Time // Oldest first (chronological order)
+	windowSize int
+	maxSize    int // windowSize + buffer for safety
+}
+
 // NewBlockchainV2 creates a new professional blockchain
 func NewBlockchainV2(genesis *GenesisConfig, persister BlockPersister) *BlockchainV2 {
+	// Determine window size for block history
+	windowSize := 120
+	if genesis.Difficulty.Window > 0 {
+		windowSize = int(genesis.Difficulty.Window)
+	}
+
 	bc := &BlockchainV2{
 		blocks:          make([]*Block, 0),
 		height:          0,
@@ -88,11 +105,17 @@ func NewBlockchainV2(genesis *GenesisConfig, persister BlockPersister) *Blockcha
 		SnapshotManager: NewSnapshotManager(),
 		forkBlocks:      make(map[string][]*Block),
 		blockIndex:      make(map[string]*Block),
+		blockHistory:    NewBlockHistory(windowSize), // NEW: Initialize block history
 	}
 
 	// Try to load existing chain from storage
 	if bc.storage != nil {
 		bc.loadChainFromStorage()
+	}
+
+	// Initialize history from existing blocks
+	if bc.height > 0 {
+		bc.blockHistory.Rebuild(bc.blocks)
 	}
 
 	// Create genesis block if chain is empty
@@ -142,6 +165,93 @@ func NewDifficultyAdjustment() *DifficultyAdjustment {
 		windowSize:  144, // 24 hours at 30s blocks
 		blockTimes:  make([]time.Time, 0),
 		adjustments: make([]uint64, 0),
+	}
+}
+
+// NewBlockHistory creates a new block history
+func NewBlockHistory(windowSize int) *BlockHistory {
+	maxSize := windowSize
+	if maxSize < 120 {
+		maxSize = 120 // Minimum buffer
+	}
+	return &BlockHistory{
+		timestamps: make([]time.Time, 0, maxSize),
+		windowSize: windowSize,
+		maxSize:    maxSize,
+	}
+}
+
+// AddBlock adds a new block timestamp (called from addBlockV2)
+func (bh *BlockHistory) AddBlock(timestamp time.Time) {
+	bh.mu.Lock()
+	defer bh.mu.Unlock()
+
+	// Add new timestamp
+	bh.timestamps = append(bh.timestamps, timestamp)
+
+	// Keep only last maxSize timestamps
+	if len(bh.timestamps) > bh.maxSize {
+		bh.timestamps = bh.timestamps[len(bh.timestamps)-bh.maxSize:]
+	}
+}
+
+// GetHistory returns block history for LWMA calculation (lock-free read)
+func (bh *BlockHistory) GetHistory() []time.Time {
+	bh.mu.RLock()
+	defer bh.mu.RUnlock()
+
+	// Return copy to avoid race conditions
+	result := make([]time.Time, len(bh.timestamps))
+	copy(result, bh.timestamps)
+	return result
+}
+
+// GetWindow returns last N timestamps (for LWMA window)
+func (bh *BlockHistory) GetWindow(windowSize int) []time.Time {
+	bh.mu.RLock()
+	defer bh.mu.RUnlock()
+
+	if windowSize > len(bh.timestamps) {
+		windowSize = len(bh.timestamps)
+	}
+
+	if windowSize == 0 {
+		return []time.Time{}
+	}
+
+	// Return last windowSize timestamps
+	start := len(bh.timestamps) - windowSize
+	if start < 0 {
+		start = 0
+	}
+
+	result := make([]time.Time, windowSize)
+	copy(result, bh.timestamps[start:])
+	return result
+}
+
+// Clear clears the history (for reorganization)
+func (bh *BlockHistory) Clear() {
+	bh.mu.Lock()
+	defer bh.mu.Unlock()
+	bh.timestamps = make([]time.Time, 0, bh.maxSize)
+}
+
+// Rebuild rebuilds history from blocks (for reorganization)
+func (bh *BlockHistory) Rebuild(blocks []*Block) {
+	bh.mu.Lock()
+	defer bh.mu.Unlock()
+
+	bh.timestamps = make([]time.Time, 0, len(blocks))
+	for _, block := range blocks {
+		if block != nil {
+			bh.timestamps = append(bh.timestamps, block.Header.Timestamp)
+		}
+	}
+
+	// Keep only last maxSize
+	if len(bh.timestamps) > bh.maxSize {
+		bh.timestamps = bh.timestamps[len(bh.timestamps)-bh.maxSize:]
 	}
 }
 
@@ -326,6 +436,10 @@ func (bc *BlockchainV2) addBlockV2(block *Block) error {
 	bc.height = block.Header.Number
 	bc.bestBlock = block
 
+	// CRITICAL: Update block history OUTSIDE main lock (uses separate lock)
+	// This prevents blocking createBlockTemplate
+	bc.blockHistory.AddBlock(block.Header.Timestamp)
+
 	// Update state
 	bc.stateManager.SetState("height", bc.height)
 	bc.stateManager.SetState("bestBlock", block.Hash)
@@ -499,7 +613,9 @@ func (bc *BlockchainV2) validateBlockV2WithParent(block *Block, parent *Block) e
 
 	// Validate difficulty
 	consensusManager := NewConsensusManager(bc.genesis)
-	expectedDifficulty := consensusManager.CalculateDifficulty(block.Header.Number, parent)
+	// For validation, we don't have full block history, so pass empty slice
+	// The difficulty is already set in the block, we just validate it matches expected
+	expectedDifficulty := consensusManager.CalculateDifficulty(block.Header.Number, parent, []time.Time{})
 	if block.Header.Difficulty != expectedDifficulty {
 		return fmt.Errorf("invalid difficulty: expected %d, got %d", expectedDifficulty, block.Header.Difficulty)
 	}
@@ -730,6 +846,10 @@ func (bc *BlockchainV2) reorganizeChain(newBestBlock *Block) error {
 	bc.stateManager.SetState("height", bc.height)
 	bc.stateManager.SetState("bestBlock", bc.bestBlock.Hash)
 
+	// CRITICAL: Rebuild block history after reorganization (uses separate lock)
+	// This prevents blocking createBlockTemplate
+	bc.blockHistory.Rebuild(bc.blocks)
+
 	// Emit reorganization event
 	bc.eventBus.Emit("chainReorganized", map[string]interface{}{
 		"oldBest": bc.bestBlock,
@@ -897,6 +1017,16 @@ func (bc *BlockchainV2) GetHeight() uint64 {
 	return bc.height
 }
 
+// GetBlockHistoryForDifficulty returns block history for LWMA difficulty adjustment
+// This is a public method that uses the separate blockHistory lock (not main lock)
+func (bc *BlockchainV2) GetBlockHistoryForDifficulty(blockNumber uint64) []time.Time {
+	windowSize := int(bc.genesis.Difficulty.Window)
+	if windowSize == 0 {
+		windowSize = 120 // Default window size
+	}
+	return bc.blockHistory.GetWindow(windowSize)
+}
+
 // GetConsensus returns the consensus mechanism
 func (bc *BlockchainV2) GetConsensus() *ConsensusV2 {
 	return bc.consensus
@@ -963,9 +1093,16 @@ func (bc *BlockchainV2) CreateNewBlockV2(miner Address, txs []Transaction) *Bloc
 		return nil
 	}
 
-	// Calculate difficulty using ConsensusManager (uses Genesis config)
+	// Get block history for LWMA difficulty adjustment (uses separate lock, no main lock needed)
+	windowSize := int(bc.genesis.Difficulty.Window)
+	if windowSize == 0 {
+		windowSize = 120 // Default window size
+	}
+	blockHistory := bc.blockHistory.GetWindow(windowSize)
+
+	// Calculate difficulty using ConsensusManager with LWMA (uses Genesis config)
 	consensusManager := NewConsensusManager(bc.genesis)
-	difficulty := consensusManager.CalculateDifficulty(parent.Header.Number+1, parent)
+	difficulty := consensusManager.CalculateDifficulty(parent.Header.Number+1, parent, blockHistory)
 
 	// Calculate block reward distribution (Miner + Treasury)
 	baseReward := bc.genesis.GetCurrentReward(parent.Header.Number + 1)

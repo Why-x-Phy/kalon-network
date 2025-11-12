@@ -58,7 +58,9 @@ func (cm *ConsensusManager) ValidateBlock(block *Block, parent *Block) error {
 
 	// Validate difficulty
 	if parent != nil {
-		expectedDifficulty := cm.CalculateDifficulty(block.Header.Number, parent)
+		// For validation, we don't have full block history, so pass empty slice
+		// The difficulty is already set in the block, we just validate it matches expected
+		expectedDifficulty := cm.CalculateDifficulty(block.Header.Number, parent, []time.Time{})
 		if block.Header.Difficulty != expectedDifficulty {
 			return fmt.Errorf("invalid difficulty: expected %d, got %d",
 				expectedDifficulty, block.Header.Difficulty)
@@ -173,7 +175,7 @@ func (cm *ConsensusManager) ValidateProofOfWork(block *Block) bool {
 }
 
 // CalculateDifficulty calculates the difficulty for the next block using LWMA
-func (cm *ConsensusManager) CalculateDifficulty(height uint64, parent *Block) uint64 {
+func (cm *ConsensusManager) CalculateDifficulty(height uint64, parent *Block, blockHistory []time.Time) uint64 {
 	if height == 0 {
 		return cm.genesis.Difficulty.InitialDifficulty // Initial difficulty
 	}
@@ -192,15 +194,44 @@ func (cm *ConsensusManager) CalculateDifficulty(height uint64, parent *Block) ui
 		return parent.Header.Difficulty
 	}
 
-	// For blocks during launch guard, keep difficulty stable
-	// Just return parent difficulty for now (no adjustment during launch)
-	// Once we implement proper LWMA with block history, this will work correctly
-	if height < cm.genesis.Difficulty.Window {
+	// Need at least 2 blocks for LWMA calculation
+	if len(blockHistory) < 2 {
 		return parent.Header.Difficulty
 	}
 
-	// Keep difficulty stable (no adjustment factor yet)
-	adjustmentFactor := 1.0
+	// Calculate LWMA (Linear Weighted Moving Average)
+	// Weight more recent blocks more heavily
+	targetBlockTime := time.Duration(cm.genesis.BlockTimeTarget) * time.Second
+
+	// Calculate weighted average block time
+	var weightSum float64
+	var weightedTimeSum time.Duration
+
+	for i, timestamp := range blockHistory {
+		// Weight: more recent blocks have higher weight
+		// Weight = position in array (last block has highest weight)
+		weight := float64(i + 1)
+		weightSum += weight
+
+		// Calculate time difference from previous block
+		if i > 0 {
+			blockTime := timestamp.Sub(blockHistory[i-1])
+			weightedTimeSum += time.Duration(float64(blockTime) * weight)
+		}
+	}
+
+	if weightSum == 0 {
+		return parent.Header.Difficulty
+	}
+
+	// Calculate average block time
+	avgBlockTime := weightedTimeSum / time.Duration(weightSum)
+	if avgBlockTime <= 0 {
+		return parent.Header.Difficulty
+	}
+
+	// Calculate adjustment factor
+	adjustmentFactor := float64(targetBlockTime) / float64(avgBlockTime)
 
 	// Apply maximum adjustment limit
 	maxAdjust := float64(cm.genesis.Difficulty.MaxAdjustPerBlockPct) / 100.0
@@ -208,6 +239,13 @@ func (cm *ConsensusManager) CalculateDifficulty(height uint64, parent *Block) ui
 		adjustmentFactor = 1 + maxAdjust
 	} else if adjustmentFactor < 1-maxAdjust {
 		adjustmentFactor = 1 - maxAdjust
+	}
+
+	// Additional safety caps (max 2x increase, min 0.5x decrease per block)
+	if adjustmentFactor > 2.0 {
+		adjustmentFactor = 2.0
+	} else if adjustmentFactor < 0.5 {
+		adjustmentFactor = 0.5
 	}
 
 	newDifficulty := uint64(float64(parent.Header.Difficulty) * adjustmentFactor)
