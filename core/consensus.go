@@ -58,7 +58,9 @@ func (cm *ConsensusManager) ValidateBlock(block *Block, parent *Block) error {
 
 	// Validate difficulty
 	if parent != nil {
-		expectedDifficulty := cm.CalculateDifficulty(block.Header.Number, parent)
+		// For validation, we don't have full block history, so pass empty slice
+		// The difficulty is already set in the block, we just validate it matches expected
+		expectedDifficulty := cm.CalculateDifficulty(block.Header.Number, parent, []time.Time{})
 		if block.Header.Difficulty != expectedDifficulty {
 			return fmt.Errorf("invalid difficulty: expected %d, got %d",
 				expectedDifficulty, block.Header.Difficulty)
