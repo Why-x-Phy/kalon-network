@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -118,10 +119,37 @@ func (n *NodeV2) Start() error {
 	}
 	core.LogInfo("Blockchain initialized with height: %d", n.blockchain.GetHeight())
 
+	// Combine seed nodes from seed-nodes.json and command line
+	seedNodes := make([]string, 0)
+	seedNodeMap := make(map[string]bool) // Use map to avoid duplicates
+
+	// Add seed nodes from seed-nodes.json (licensed seed nodes)
+	licensedSeeds := n.loadLicensedSeedNodes()
+	if len(licensedSeeds) > 0 {
+		core.LogInfo("Found %d licensed seed nodes", len(licensedSeeds))
+		for _, seedNode := range licensedSeeds {
+			seedNode = strings.TrimSpace(seedNode)
+			if seedNode != "" && !seedNodeMap[seedNode] {
+				seedNodes = append(seedNodes, seedNode)
+				seedNodeMap[seedNode] = true
+			}
+		}
+	}
+
+	// Log final seed nodes configuration
+	if len(seedNodes) > 0 {
+		core.LogInfo("Configured %d seed nodes:", len(seedNodes))
+		for i, seedNode := range seedNodes {
+			core.LogInfo("  [%d] %s", i+1, seedNode)
+		}
+	} else {
+		core.LogWarn("No seed nodes configured - P2P network will only accept incoming connections")
+	}
+
 	// Initialize P2P network first (before RPC server)
 	p2pConfig := &network.P2PConfig{
 		ListenAddr:   n.config.P2PAddr,
-		SeedNodes:    []string{}, // TODO: Add seed nodes
+		SeedNodes:    seedNodes,
 		MaxPeers:     50,
 		DialTimeout:  10 * time.Second,
 		ReadTimeout:  30 * time.Second,
@@ -129,6 +157,15 @@ func (n *NodeV2) Start() error {
 		KeepAlive:    60 * time.Second,
 	}
 	n.p2p = network.NewP2P(p2pConfig)
+
+	// Set allowed IPs from seed nodes (whitelist for incoming connections)
+	// This ensures only approved seed nodes can connect
+	allowedIPs := make([]string, 0)
+	for _, seedNode := range seedNodes {
+		allowedIPs = append(allowedIPs, seedNode)
+	}
+	n.p2p.SetAllowedIPs(allowedIPs)
+	core.LogInfo("P2P whitelist enabled: %d approved seed nodes", len(allowedIPs))
 
 	// Create RPC server
 	n.rpcServer = rpc.NewServerV2(n.config.RPCAddr, n.blockchain)
@@ -199,6 +236,52 @@ func (n *NodeV2) Stop() error {
 	n.running = false
 
 	return nil
+}
+
+// loadLicensedSeedNodes loads licensed seed nodes from seed-nodes.json
+func (n *NodeV2) loadLicensedSeedNodes() []string {
+	// Try to load from genesis directory first, then from data directory
+	seedNodesFile := "genesis/seed-nodes.json"
+	if _, err := os.Stat(seedNodesFile); os.IsNotExist(err) {
+		// Try data directory
+		dataSeedNodesFile := n.config.DataDir + "/seed-nodes.json"
+		if _, err := os.Stat(dataSeedNodesFile); err == nil {
+			seedNodesFile = dataSeedNodesFile
+		} else {
+			// File doesn't exist, return empty list
+			return []string{}
+		}
+	}
+
+	data, err := os.ReadFile(seedNodesFile)
+	if err != nil {
+		core.LogDebug("Could not read seed-nodes.json: %v (this is normal if file doesn't exist)", err)
+		return []string{}
+	}
+
+	var seedNodesConfig struct {
+		LicensedSeedNodes []struct {
+			IP            string `json:"ip"`
+			LicenseTxHash string `json:"licenseTxHash"`
+			LicenseDate   string `json:"licenseDate"`
+			Status        string `json:"status"`
+		} `json:"licensedSeedNodes"`
+	}
+
+	if err := json.Unmarshal(data, &seedNodesConfig); err != nil {
+		core.LogWarn("Failed to parse seed-nodes.json: %v", err)
+		return []string{}
+	}
+
+	// Extract only active seed nodes
+	activeSeeds := make([]string, 0)
+	for _, seed := range seedNodesConfig.LicensedSeedNodes {
+		if seed.Status == "active" && seed.IP != "" {
+			activeSeeds = append(activeSeeds, seed.IP)
+		}
+	}
+
+	return activeSeeds
 }
 
 // loadGenesis loads the genesis configuration
